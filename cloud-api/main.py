@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from contextlib import asynccontextmanager
 
+import json
 import httpx
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +22,7 @@ from sqlmodel import Session, create_engine, select
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
+import uuid
 
 # Import database models with proper error handling
 try:
@@ -635,7 +637,6 @@ async def update_kiosk_health(
 @app.get("/test-qr")
 async def test_qr_code():
     """Test QR code generation and URL format"""
-    import uuid
     session_id = f"test-{uuid.uuid4().hex[:8]}"
     
     # Use direct Mini App URL format for QR codes
