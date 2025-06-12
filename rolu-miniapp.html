@@ -174,26 +174,67 @@
     </div>
 
     <script>
+        // Comprehensive debugging
+        console.log('=== ENVIRONMENT DEBUG ===');
+        console.log('window object keys:', Object.keys(window));
+        console.log('navigator.userAgent:', navigator.userAgent);
+        console.log('window.location:', window.location.href);
+        console.log('window.WorldApp:', window.WorldApp);
+        console.log('window.MiniKit:', window.MiniKit);
+        console.log('typeof window.MiniKit:', typeof window.MiniKit);
+        
+        // Check for various MiniKit possibilities
+        console.log('window.minikit:', window.minikit);
+        console.log('window.Minikit:', window.Minikit);
+        console.log('window.MINIKIT:', window.MINIKIT);
+        console.log('window.worldcoin:', window.worldcoin);
+        console.log('window.Worldcoin:', window.Worldcoin);
+        
         // Check if we're in World App environment
         const isInWorldApp = typeof window !== 'undefined' && 
                            (window.location.href.includes('worldapp://') || 
                             window.navigator.userAgent.includes('WorldApp') ||
-                            window.WorldApp);
+                            window.WorldApp ||
+                            window.location.href.includes('world.org'));
 
         console.log('Environment check:', {
             isInWorldApp,
             userAgent: navigator.userAgent,
             location: window.location.href,
-            hasWorldApp: !!window.WorldApp
+            hasWorldApp: !!window.WorldApp,
+            hasWorldAppInUrl: window.location.href.includes('worldapp://'),
+            hasWorldAppInUA: window.navigator.userAgent.includes('WorldApp'),
+            hasWorldOrgInUrl: window.location.href.includes('world.org')
         });
 
-        if (!isInWorldApp) {
-            document.getElementById('status-message').textContent = '❌ Please open this page in the World App';
-            document.getElementById('status-message').className = 'status-message status-error';
-            document.getElementById('status-message').style.display = 'block';
-            document.getElementById('withdraw-btn').disabled = true;
-            throw new Error('Not in World App environment');
+        // Show debug info on page
+        function updateDebugInfo() {
+            const debugDiv = document.getElementById('debug-info');
+            if (debugDiv) {
+                debugDiv.style.display = 'block';
+                debugDiv.innerHTML = `
+                    <strong>Debug Info:</strong><br>
+                    URL: ${window.location.href}<br>
+                    User Agent: ${navigator.userAgent}<br>
+                    window.WorldApp: ${!!window.WorldApp}<br>
+                    window.MiniKit: ${!!window.MiniKit}<br>
+                    typeof MiniKit: ${typeof window.MiniKit}<br>
+                    MiniKit keys: ${window.MiniKit ? Object.keys(window.MiniKit) : 'N/A'}<br>
+                    Is World App: ${isInWorldApp}
+                `;
+            }
         }
+
+        updateDebugInfo();
+
+        // Don't block execution - let's see what happens even if not in World App
+        // if (!isInWorldApp) {
+        //     document.getElementById('status-message').textContent = '❌ Please open this page in the World App';
+        //     document.getElementById('status-message').className = 'status-message status-error';
+        //     document.getElementById('status-message').style.display = 'block';
+        //     document.getElementById('withdraw-btn').disabled = true;
+        //     throw new Error('Not in World App environment');
+        // }
 
         // Application configuration
         const APP_CONFIG = {
@@ -224,6 +265,21 @@
 
         async function handleWithdraw() {
             try {
+                console.log('=== WITHDRAW ATTEMPT ===');
+                console.log('window.MiniKit at withdraw time:', window.MiniKit);
+                console.log('MiniKit type:', typeof window.MiniKit);
+                
+                if (!window.MiniKit) {
+                    throw new Error('MiniKit is not available on window object');
+                }
+                
+                if (!window.MiniKit.commandsAsync) {
+                    throw new Error('MiniKit.commandsAsync is not available');
+                }
+                
+                console.log('MiniKit.commandsAsync:', window.MiniKit.commandsAsync);
+                console.log('MiniKit.commandsAsync.verify:', window.MiniKit.commandsAsync.verify);
+                
                 showStatus('Starting World ID verification...', 'info');
                 setButtonState('<span class="spinner"></span>Verifying...', true);
 
@@ -284,36 +340,47 @@
                 console.error('Withdrawal Error:', error);
                 showStatus(`❌ Error: ${error.message}`, 'error');
                 setButtonState('Try Again', false);
+                updateDebugInfo(); // Update debug info on error
             }
         }
         
         // Initialize when DOM is ready
         document.addEventListener('DOMContentLoaded', async () => {
+            console.log('=== DOM CONTENT LOADED ===');
             console.log('RoluATM initializing...');
+            
+            updateDebugInfo();
             
             // Wait for MiniKit to be available in World App
             let attempts = 0;
-            const maxAttempts = 50;
+            const maxAttempts = 100; // 10 seconds
             
             const waitForMiniKit = () => {
+                console.log(`Attempt ${attempts + 1}: Checking for MiniKit...`);
+                console.log('window.MiniKit:', window.MiniKit);
+                console.log('window.MiniKit?.commandsAsync:', window.MiniKit?.commandsAsync);
+                
+                updateDebugInfo();
+                
                 if (window.MiniKit && window.MiniKit.commandsAsync) {
-                    console.log('MiniKit found in World App environment');
+                    console.log('✅ MiniKit found in World App environment');
                     
                     try {
                         // Install the app
+                        console.log('Installing MiniKit with appId:', APP_CONFIG.appId);
                         window.MiniKit.install(APP_CONFIG.appId);
-                        console.log('MiniKit installed successfully');
+                        console.log('✅ MiniKit installed successfully');
                         
                         setButtonState('Withdraw $10.50', false);
-                        showStatus('Ready to withdraw. Click to verify with World ID.', 'info');
+                        showStatus('Ready to withdraw. Click to verify with World ID.', 'success');
                         elements.withdrawBtn.addEventListener('click', handleWithdraw);
                         
                     } catch (error) {
                         console.error('MiniKit installation error:', error);
-                        if (error.message.includes('already_installed')) {
-                            console.log('App already installed, proceeding...');
+                        if (error.message && error.message.includes('already_installed')) {
+                            console.log('✅ App already installed, proceeding...');
                             setButtonState('Withdraw $10.50', false);
-                            showStatus('Ready to withdraw. Click to verify with World ID.', 'info');
+                            showStatus('Ready to withdraw. Click to verify with World ID.', 'success');
                             elements.withdrawBtn.addEventListener('click', handleWithdraw);
                         } else {
                             showStatus(`❌ Setup Failed: ${error.message}`, 'error');
@@ -322,12 +389,13 @@
                     }
                 } else if (attempts < maxAttempts) {
                     attempts++;
-                    console.log(`Waiting for MiniKit... attempt ${attempts}`);
+                    console.log(`⏳ Waiting for MiniKit... attempt ${attempts}/${maxAttempts}`);
                     setTimeout(waitForMiniKit, 100);
                 } else {
-                    console.error('MiniKit not found after maximum attempts');
+                    console.error('❌ MiniKit not found after maximum attempts');
                     showStatus('❌ Could not connect to World App. Please refresh.', 'error');
                     setButtonState('Connection Failed', true);
+                    updateDebugInfo();
                 }
             };
             
