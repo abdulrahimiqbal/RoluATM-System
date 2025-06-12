@@ -76,7 +76,7 @@ logger.info(f"Database URL configured: {bool(DATABASE_URL)}")
 # Create database engine with error handling
 try:
     if DATABASE_URL and DATABASE_URL != "sqlite:///./test.db" and DB_MODELS_AVAILABLE:
-engine = create_engine(DATABASE_URL, echo=False)
+        engine = create_engine(DATABASE_URL, echo=False)
         DATABASE_CONNECTED = True
     else:
         engine = None
