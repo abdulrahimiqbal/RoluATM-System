@@ -173,9 +173,12 @@
         </div>
     </div>
 
-    <script type="module">
-        // Import MiniKit from CDN
-        import { MiniKit, VerificationLevel } from 'https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@latest/+esm';
+    <!-- Load MiniKit library globally first -->
+    <script src="https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@latest/dist/index.global.js"></script>
+
+    <script>
+        // ES Module import is removed, we now expect MiniKit on the window object.
+        const { MiniKit, VerificationLevel } = window.MiniKit;
         
         // Application configuration
         const APP_CONFIG = {
@@ -272,36 +275,34 @@
             }
         }
         
-        // Main initialization logic
-        document.addEventListener('DOMContentLoaded', () => {
+        // --- Main Initialization ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log("RoluATM Initializing...");
             setButtonState('Initializing...', true);
-            showStatus('Please wait, initializing Mini App...', 'info');
 
-            // Wait for MiniKit to become available
-            let attempts = 0;
-            const maxAttempts = 50; // 5 seconds
-            const interval = setInterval(() => {
-                if (typeof MiniKit !== 'undefined' || attempts >= maxAttempts) {
-                    clearInterval(interval);
-                    if (typeof MiniKit !== 'undefined') {
-                        // Inspired by the working Rolu app: a simple, one-time install call.
-                        console.log('MiniKit loaded. Installing...');
-                        MiniKit.install(APP_CONFIG.appId, {
-                            // Optional: you can configure other options here if needed
-                        });
-                        console.log('MiniKit installation called. Ready for interaction.');
-                        showStatus('Ready for withdrawal', 'success');
-                        setButtonState('Withdraw $10.50', false);
-                        elements.withdrawBtn.addEventListener('click', handleWithdraw);
-                    } else {
-                        console.error('MiniKit failed to load after 5 seconds.');
-                        showStatus('❌ Could not connect to World App. Please try again.', 'error');
-                        setButtonState('Initialization Failed', true);
-                    }
-                }
-                attempts++;
-            }, 100);
+            if (typeof MiniKit === 'undefined') {
+                showStatus('❌ Critical Error: MiniKit not found. Please refresh.', 'error');
+                return;
+            }
+
+            try {
+                console.log("Installing MiniKit...");
+                // Initialize MiniKit
+                MiniKit.install(APP_CONFIG.appId, {
+                    verification_level: VerificationLevel.Orb
+                });
+                console.log("MiniKit Installed. Ready for withdrawal.");
+                setButtonState('Withdraw $10.50', false);
+                showStatus('Ready to withdraw. Please verify with World ID.', 'info');
+            } catch (error) {
+                console.error("MiniKit Initialization Error:", error);
+                showStatus(`❌ Setup Failed: ${error.message}`, 'error');
+                setButtonState('Setup Failed', true);
+            }
         });
+
+        // --- Event Listeners ---
+        elements.withdrawBtn.addEventListener('click', handleWithdraw);
     </script>
 </body>
 </html> 
