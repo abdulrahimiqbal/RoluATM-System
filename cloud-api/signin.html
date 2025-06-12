@@ -179,9 +179,6 @@
         </div>
     </div>
 
-    <!-- MiniKit SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@latest/dist/minikit.js"></script>
-    
     <script>
         // App Configuration
         const APP_CONFIG = {
@@ -222,27 +219,48 @@
             debugLog(`Button: "${text}", disabled: ${disabled}`);
         }
 
-        // World ID Sign-In using MiniKit
+        // Load MiniKit dynamically
+        async function loadMiniKit() {
+            return new Promise((resolve, reject) => {
+                if (window.MiniKit) {
+                    resolve(window.MiniKit);
+                    return;
+                }
+
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@latest/dist/minikit.js';
+                script.onload = () => {
+                    if (window.MiniKit) {
+                        resolve(window.MiniKit);
+                    } else {
+                        reject(new Error('MiniKit failed to load'));
+                    }
+                };
+                script.onerror = () => reject(new Error('Failed to load MiniKit script'));
+                document.head.appendChild(script);
+            });
+        }
+
+        // World ID Sign-In using native World App messaging (fallback)
         async function performWorldIDSignIn() {
-            debugLog('🔐 Starting World ID sign-in with MiniKit...');
+            debugLog('🔐 Starting World ID sign-in...');
             
-            if (!window.MiniKit) {
-                throw new Error('MiniKit not available');
-            }
-
-            if (!MiniKit.isInstalled()) {
-                throw new Error('World App not detected');
-            }
-
-            const verifyPayload = {
-                action: APP_CONFIG.action,
-                signal: APP_CONFIG.signal,
-                verification_level: 'orb'
-            };
-
-            debugLog('Verify payload: ' + JSON.stringify(verifyPayload));
-
+            // Try MiniKit first
             try {
+                await loadMiniKit();
+                debugLog('✅ MiniKit loaded successfully');
+                
+                if (!MiniKit.isInstalled()) {
+                    throw new Error('World App not detected via MiniKit');
+                }
+
+                const verifyPayload = {
+                    action: APP_CONFIG.action,
+                    signal: APP_CONFIG.signal,
+                    verification_level: 'orb'
+                };
+
+                debugLog('Using MiniKit verify: ' + JSON.stringify(verifyPayload));
                 const { finalPayload } = await MiniKit.commandsAsync.verify(verifyPayload);
                 debugLog('MiniKit verify response: ' + JSON.stringify(finalPayload));
 
@@ -255,9 +273,56 @@
                 } else {
                     throw new Error('Unexpected verification response status: ' + finalPayload.status);
                 }
-            } catch (error) {
-                debugLog('MiniKit verify error: ' + error.message);
-                throw error;
+            } catch (miniKitError) {
+                debugLog('⚠️ MiniKit failed: ' + miniKitError.message);
+                debugLog('🔄 Falling back to native World App messaging...');
+                
+                // Fallback to native World App messaging
+                if (!window.WorldApp) {
+                    throw new Error('Neither MiniKit nor World App available');
+                }
+
+                return new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        reject(new Error('Sign-in timeout'));
+                    }, 30000);
+
+                    const messageHandler = (event) => {
+                        debugLog('Received native message: ' + JSON.stringify(event.data));
+                        
+                        if (event.data?.eventType === 'verify') {
+                            clearTimeout(timeout);
+                            window.removeEventListener('message', messageHandler);
+                            
+                            if (event.data.eventData?.nullifier_hash) {
+                                // Convert to MiniKit-like format
+                                resolve({
+                                    status: 'success',
+                                    nullifier_hash: event.data.eventData.nullifier_hash,
+                                    merkle_root: event.data.eventData.merkle_root,
+                                    proof: event.data.eventData.proof,
+                                    verification_level: event.data.eventData.verification_level || 'orb'
+                                });
+                            } else {
+                                reject(new Error('Invalid sign-in response'));
+                            }
+                        }
+                    };
+
+                    window.addEventListener('message', messageHandler);
+
+                    const signInMessage = {
+                        eventType: 'verify',
+                        eventData: {
+                            action: APP_CONFIG.action,
+                            signal: APP_CONFIG.signal,
+                            verification_level: 'orb'
+                        }
+                    };
+
+                    debugLog('Sending native message: ' + JSON.stringify(signInMessage));
+                    window.parent.postMessage(signInMessage, '*');
+                });
             }
         }
 
@@ -315,7 +380,7 @@
             }
         }
 
-        // Initialize MiniKit and app
+        // Initialize app
         async function initializeApp() {
             debugLog('🚀 RoluATM Sign-In initialized');
             debugLog('User Agent: ' + navigator.userAgent);
@@ -346,27 +411,15 @@
                 }
             }
             
-            // Check MiniKit availability
-            if (typeof window.MiniKit !== 'undefined') {
-                debugLog('✅ MiniKit available');
-                
-                if (MiniKit.isInstalled()) {
-                    debugLog('✅ World App detected');
-                    showStatus('Ready to sign in with World ID', 'success');
-                    setButtonState('🌍 Sign in with World ID', false);
-                } else {
-                    debugLog('❌ World App not installed');
-                    showStatus('Please open this page in the World App.', 'error');
-                    setButtonState('Open in World App', true);
-                }
+            // Check World App availability (try both MiniKit and native)
+            if (window.WorldApp || window.MiniKit) {
+                debugLog('✅ World App environment detected');
+                showStatus('Ready to sign in with World ID', 'success');
+                setButtonState('🌍 Sign in with World ID', false);
             } else {
-                debugLog('❌ MiniKit not available');
-                showStatus('Loading World ID SDK...', 'warning');
-                setButtonState('Loading...', true);
-                
-                // Retry after a short delay
-                setTimeout(initializeApp, 1000);
-                return;
+                debugLog('❌ World App not detected');
+                showStatus('Please open this page in the World App.', 'error');
+                setButtonState('Open in World App', true);
             }
 
             // Add click handler
@@ -377,10 +430,9 @@
             });
         }
 
-        // Wait for DOM and MiniKit to be ready
+        // Wait for DOM to be ready
         document.addEventListener('DOMContentLoaded', () => {
-            // Give MiniKit time to load
-            setTimeout(initializeApp, 500);
+            initializeApp();
         });
     </script>
 </body>
