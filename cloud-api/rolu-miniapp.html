@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoluATM - Cash Withdrawal</title>
+    <script src="https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@0.0.44/dist/minikit.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .logo {
+            font-size: 32px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .amount-display {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .amount-value {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .action-button {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 15px 0;
+            transition: all 0.3s ease;
+        }
+        
+        .status-message {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-weight: 500;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🏧 RoluATM</div>
+            <div>World ID Verified Cash Withdrawal</div>
+        </div>
+        
+        <div class="amount-display">
+            <div class="amount-value">$10.00</div>
+            <div>Cash Withdrawal + $0.50 fee</div>
+        </div>
+        
+        <div id="status-message" class="status-message" style="display: none;"></div>
+        
+        <button id="verify-btn" class="action-button">
+            Verify with World ID
+        </button>
+        
+        <button id="payment-btn" class="action-button" style="display: none;" disabled>
+            Authorize Payment
+        </button>
+    </div>
+
+    <script>
+        // Initialize MiniKit
+        if (typeof MiniKit !== 'undefined') {
+            MiniKit.init({
+                app_id: 'app_263013ca6f702add37ad338fa43d4307'
+            });
+        }
+        
+        let sessionId = new URLSearchParams(window.location.search).get('session') || 'demo-session-' + Date.now();
+        
+        document.getElementById('verify-btn').addEventListener('click', async () => {
+            try {
+                showStatus('Verifying your World ID...', 'warning');
+                
+                const verifyResponse = await MiniKit.commands.verify({
+                    action: 'withdraw-cash',
+                    signal: sessionId,
+                    verification_level: 'orb'
+                });
+                
+                if (verifyResponse.success) {
+                    showStatus('World ID verified! Checking wallet...', 'success');
+                    document.getElementById('verify-btn').style.display = 'none';
+                    document.getElementById('payment-btn').style.display = 'block';
+                    
+                    // Connect wallet
+                    const walletResponse = await MiniKit.commands.walletAuth({
+                        permissions: ['wallet:read']
+                    });
+                    
+                    if (walletResponse.success) {
+                        document.getElementById('payment-btn').disabled = false;
+                        showStatus('Ready for payment authorization', 'success');
+                    }
+                }
+            } catch (error) {
+                showStatus('Verification failed: ' + error.message, 'error');
+            }
+        });
+        
+        document.getElementById('payment-btn').addEventListener('click', async () => {
+            try {
+                showStatus('Processing payment...', 'warning');
+                
+                const paymentResponse = await MiniKit.commands.pay({
+                    to: '0x742fd484b63E7C9b7f34FAb65A8c165B7cd5C5e8',
+                    value: 10.50,
+                    token: 'USDC',
+                    description: 'RoluATM Cash Withdrawal',
+                    reference: sessionId
+                });
+                
+                if (paymentResponse.success) {
+                    showStatus('Payment successful! Dispensing cash...', 'success');
+                    
+                    // Signal dispenser
+                    await fetch('https://rolu-atm-system.vercel.app/confirm-withdrawal', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            kiosk_id: 'demo-kiosk-001',
+                            session_id: sessionId,
+                            coins_dispensed: 40,
+                            timestamp: new Date().toISOString()
+                        })
+                    });
+                    
+                    document.getElementById('payment-btn').innerHTML = '✅ Complete';
+                }
+            } catch (error) {
+                showStatus('Payment failed: ' + error.message, 'error');
+            }
+        });
+        
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('status-message');
+            statusEl.textContent = message;
+            statusEl.className = `status-message status-${type}`;
+            statusEl.style.display = 'block';
+        }
+    </script>
+</body>
+</html> 

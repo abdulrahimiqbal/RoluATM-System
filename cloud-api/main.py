@@ -368,7 +368,7 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "service": "RoluATM Cloud API",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "environment": {
             "has_database_url": bool(DATABASE_URL and DATABASE_URL != "sqlite:///./test.db"),
             "world_id_app_id": bool(WORLD_ID_APP_ID),
@@ -959,6 +959,17 @@ async def update_kiosk_health(request: KioskHealthUpdate, background_tasks: Back
     except Exception as e:
         logger.error(f"Kiosk health update error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/miniapp")
+async def mini_app_interface():
+    """Serve the MiniKit-enabled Mini App for World App"""
+    try:
+        with open("cloud-api/rolu-miniapp.html", "r", encoding="utf-8") as f:
+            html_content = f.read()
+        return HTMLResponse(content=html_content)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Mini App file not found")
 
 
 # For local development
