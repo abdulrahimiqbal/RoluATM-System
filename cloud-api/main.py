@@ -642,11 +642,37 @@ async def root():
                 return;
             }}
             
+            console.log('MiniKit object available:', MiniKit);
+            console.log('User agent:', navigator.userAgent);
+            console.log('MiniKit.isInstalled():', MiniKit.isInstalled());
+            
             // Check if MiniKit is properly installed (running in World App)
             if (!MiniKit.isInstalled()) {{
-                showStatus('❌ Error: Please open this page in the World App.', 'error');
-                console.error('MiniKit is not installed - not running in World App.');
-                return;
+                // Additional checks for World App environment
+                const userAgent = navigator.userAgent || '';
+                const isLikelyWorldApp = userAgent.includes('WorldApp') || 
+                                       userAgent.includes('World') || 
+                                       window.location.href.includes('worldapp://') ||
+                                       window.parent !== window; // In iframe/webview
+                
+                if (isLikelyWorldApp) {{
+                    console.log('Detected World App environment, but MiniKit.isInstalled() returned false');
+                    showStatus('🔄 Initializing World App connection...', 'info');
+                    // Try to proceed anyway - sometimes isInstalled() is unreliable
+                    setTimeout(() => {{
+                        if (typeof MiniKit !== 'undefined') {{
+                            console.log('Proceeding with MiniKit despite isInstalled() = false');
+                            initializeApp();
+                        }} else {{
+                            showStatus('❌ Error: Please open this page in the World App.', 'error');
+                        }}
+                    }}, 1000);
+                    return;
+                }} else {{
+                    showStatus('❌ Error: Please open this page in the World App.', 'error');
+                    console.error('MiniKit is not installed - not running in World App.');
+                    return;
+                }}
             }}
             
             console.log('MiniKit is properly installed and ready');
