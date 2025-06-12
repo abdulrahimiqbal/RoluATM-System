@@ -1,0 +1,38 @@
+[Unit]
+Description=RoluATM Kiosk Backend Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/roluatm/kiosk-pi/backend
+Environment=PATH=/opt/roluatm/kiosk-pi/backend/venv/bin
+ExecStart=/opt/roluatm/kiosk-pi/backend/venv/bin/python app.py
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+RestartSec=5
+Restart=always
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/roluatm/kiosk-pi/backend/logs /tmp
+PrivateDevices=false
+DeviceAllow=/dev/ttyACM0 rw
+SupplementaryGroups=dialout
+
+# Environment file
+EnvironmentFile=-/opt/roluatm/kiosk-pi/.env
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=worldcash
+
+[Install]
+WantedBy=multi-user.target 

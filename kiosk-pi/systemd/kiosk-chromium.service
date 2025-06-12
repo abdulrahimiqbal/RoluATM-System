@@ -1,0 +1,56 @@
+[Unit]
+Description=RoluATM Kiosk Chromium Display
+After=graphical-session.target worldcash.service
+Wants=graphical-session.target
+Requires=worldcash.service
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+ExecStartPre=/bin/sleep 10
+ExecStart=/usr/bin/chromium-browser \
+    --kiosk \
+    --no-sandbox \
+    --disable-dev-shm-usage \
+    --disable-extensions \
+    --disable-plugins \
+    --disable-translate \
+    --disable-infobars \
+    --disable-features=TranslateUI \
+    --disable-ipc-flooding-protection \
+    --disable-background-timer-throttling \
+    --disable-renderer-backgrounding \
+    --disable-backgrounding-occluded-windows \
+    --disable-field-trial-config \
+    --force-device-scale-factor=1 \
+    --autoplay-policy=no-user-gesture-required \
+    --check-for-update-interval=31536000 \
+    --simulate-outdated-no-au='Tue, 31 Dec 2099 23:59:59 GMT' \
+    --disable-component-update \
+    --overscroll-history-navigation=0 \
+    --disable-background-networking \
+    --disable-sync \
+    --metrics-recording-only \
+    --disable-default-apps \
+    --mute-audio \
+    --no-first-run \
+    --fast \
+    --fast-start \
+    --disable-logging \
+    --disable-gpu-logging \
+    --silent-debugger-extension-api \
+    --user-data-dir=/tmp/chromium-kiosk \
+    http://localhost:3000
+    
+ExecStop=/usr/bin/pkill chromium
+Restart=always
+RestartSec=3
+
+# X11 access
+SupplementaryGroups=video audio
+
+[Install]
+WantedBy=graphical-session.target 

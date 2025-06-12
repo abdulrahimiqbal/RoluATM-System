@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-gray-100 text-gray-900 font-sans;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  /* Disable text selection and scrolling for kiosk mode */
+  * {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  
+  /* Allow selection for input fields */
+  input, textarea {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary-500 hover:bg-primary-600 text-white font-semibold py-4 px-8 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-4 px-8 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-success {
+    @apply bg-success-500 hover:bg-success-600 text-white font-semibold py-4 px-8 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-error {
+    @apply bg-error-500 hover:bg-error-600 text-white font-semibold py-4 px-8 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .kiosk-card {
+    @apply bg-white rounded-xl shadow-lg border border-gray-200 p-kiosk-lg;
+  }
+  
+  .kiosk-input {
+    @apply w-full p-4 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+  }
+  
+  .amount-button {
+    @apply bg-white border-2 border-gray-300 hover:border-primary-500 hover:bg-primary-50 text-gray-900 font-semibold py-6 px-8 rounded-lg transition-all duration-200 text-kiosk-xl;
+  }
+  
+  .amount-button.selected {
+    @apply border-primary-500 bg-primary-50 text-primary-700;
+  }
+  
+  .status-indicator {
+    @apply flex items-center gap-2 text-sm font-medium;
+  }
+  
+  .status-indicator.online {
+    @apply text-success-600;
+  }
+  
+  .status-indicator.offline {
+    @apply text-error-600;
+  }
+  
+  .status-indicator.degraded {
+    @apply text-warning-600;
+  }
+} 
