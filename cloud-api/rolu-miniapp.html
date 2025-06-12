@@ -155,23 +155,52 @@
                 console.log('Verification response:', verifyResponse);
                 
                 if (verifyResponse.success) {
-                    showStatus('World ID verified! Checking wallet...', 'success');
-                    document.getElementById('verify-btn').style.display = 'none';
-                    document.getElementById('payment-btn').style.display = 'block';
+                    showStatus('World ID verified! Sending to backend...', 'success');
                     
-                    // Connect wallet
-                    console.log('Requesting wallet authentication...');
-                    const walletResponse = await MiniKit.commands.walletAuth({
-                        permissions: ['wallet:read']
-                    });
-                    
-                    console.log('Wallet response:', walletResponse);
-                    
-                    if (walletResponse.success) {
-                        document.getElementById('payment-btn').disabled = false;
-                        showStatus('Ready for payment authorization', 'success');
-                    } else {
-                        showStatus('Wallet connection failed', 'error');
+                    // Send verification to backend
+                    try {
+                        const backendResponse = await fetch('/verify-worldid', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                session_id: sessionId,
+                                world_id_payload: {
+                                    merkle_root: verifyResponse.merkle_root,
+                                    nullifier_hash: verifyResponse.nullifier_hash,
+                                    proof: verifyResponse.proof,
+                                    verification_level: verifyResponse.verification_level
+                                },
+                                amount_usd: 10.50
+                            })
+                        });
+                        
+                        const backendResult = await backendResponse.json();
+                        console.log('Backend verification result:', backendResult);
+                        
+                        if (backendResult.success) {
+                            document.getElementById('verify-btn').style.display = 'none';
+                            document.getElementById('payment-btn').style.display = 'block';
+                            
+                            // Connect wallet
+                            console.log('Requesting wallet authentication...');
+                            const walletResponse = await MiniKit.commands.walletAuth({
+                                permissions: ['wallet:read']
+                            });
+                            
+                            console.log('Wallet response:', walletResponse);
+                            
+                            if (walletResponse.success) {
+                                document.getElementById('payment-btn').disabled = false;
+                                showStatus('Ready for payment authorization', 'success');
+                            } else {
+                                showStatus('Wallet connection failed', 'error');
+                            }
+                        } else {
+                            throw new Error('Backend verification failed: ' + backendResult.detail);
+                        }
+                    } catch (backendError) {
+                        console.error('Backend verification error:', backendError);
+                        showStatus('Backend verification failed: ' + backendError.message, 'error');
                     }
                 } else {
                     throw new Error(verifyResponse.error || 'Verification failed');

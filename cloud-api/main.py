@@ -12,11 +12,12 @@ from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 from enum import Enum
 import json
+import uuid
 
 import httpx
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, Response, RedirectResponse
 from sqlmodel import Field, SQLModel, Relationship, Session, create_engine, select
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -427,13 +428,74 @@ async def test_endpoint():
 
 @app.get("/test-qr")
 async def test_qr_code():
-    """Test QR code generation"""
-    try:
-        with open("cloud-api/test-qr.html", "r", encoding="utf-8") as f:
-            html_content = f.read()
-        return HTMLResponse(content=html_content)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Test QR file not found")
+    """Test QR code generation and URL format"""
+    session_id = f"test-{uuid.uuid4().hex[:8]}"
+    
+    # Updated URL format with return_to parameter (required by World ID docs)
+    world_id_url = f"https://worldcoin.org/verify?app_id={WORLD_ID_APP_ID}&action={WORLD_ID_ACTION}&signal={session_id}&return_to=https://rolu-atm-system.vercel.app/miniapp?session={session_id}"
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Test QR Code - RoluATM</title>
+        <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+        <style>
+            body {{ font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; }}
+            .test-container {{ text-align: center; }}
+            .url-display {{ background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0; word-break: break-all; font-family: monospace; }}
+            .test-button {{ background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 10px; }}
+        </style>
+    </head>
+    <body>
+        <div class="test-container">
+            <h2>🧪 QR Code Test - RoluATM</h2>
+            <p><strong>Session ID:</strong> {session_id}</p>
+            
+            <h3>World ID URL (with return_to):</h3>
+            <div class="url-display">{world_id_url}</div>
+            
+            <canvas id="qrcode"></canvas>
+            
+            <div style="margin-top: 30px;">
+                <button class="test-button" onclick="window.open('{world_id_url}', '_blank')">
+                    🔗 Test Direct Link
+                </button>
+                <button class="test-button" onclick="location.href='/pay/{session_id}'">
+                    💳 Test Payment Page
+                </button>
+                <button class="test-button" onclick="location.href='/miniapp?session={session_id}'">
+                    📱 Test Mini App
+                </button>
+            </div>
+            
+            <div style="margin-top: 30px; text-align: left;">
+                <h4>Test Flow:</h4>
+                <ol>
+                    <li>Scan QR code with World App camera</li>
+                    <li>Should redirect to World App</li>
+                    <li>Should open RoluATM Mini App inside World App</li>
+                    <li>Verify World ID and authorize payment</li>
+                </ol>
+            </div>
+        </div>
+        
+        <script>
+            // Generate QR code
+            QRCode.toCanvas(document.getElementById('qrcode'), '{world_id_url}', {{
+                width: 256,
+                height: 256,
+                margin: 2
+            }}, function (error) {{
+                if (error) console.error(error);
+                console.log('QR code generated successfully!');
+            }});
+        </script>
+    </body>
+    </html>
+    """
+    
+    return HTMLResponse(content=html_content)
 
 
 @app.get("/pay/{session_id}")
@@ -442,7 +504,8 @@ async def payment_interface(session_id: str, request: Request):
     
     # For external QR codes, use the External Integration format that redirects to Mini App
     # This format works when scanned from any camera/browser and redirects to World App
-    external_redirect_url = f"https://worldcoin.org/verify?app_id={WORLD_ID_APP_ID}&action={WORLD_ID_ACTION}&signal={session_id}&redirect_uri=https://rolu-atm-system.vercel.app/miniapp?session={session_id}"
+    # According to World ID docs, we need return_to parameter for proper redirection
+    external_redirect_url = f"https://worldcoin.org/verify?app_id={WORLD_ID_APP_ID}&action={WORLD_ID_ACTION}&signal={session_id}&return_to=https://rolu-atm-system.vercel.app/miniapp?session={session_id}"
     
     html_content = f"""
     <!DOCTYPE html>
@@ -971,6 +1034,29 @@ async def update_kiosk_health(request: KioskHealthUpdate, background_tasks: Back
     except Exception as e:
         logger.error(f"Kiosk health update error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/world-id-callback")
+async def world_id_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    session: Optional[str] = None,
+    error: Optional[str] = None
+):
+    """Handle World ID OAuth/OIDC callback"""
+    if error:
+        logger.error(f"World ID callback error: {error}")
+        return HTMLResponse(f"""
+        <html><body>
+        <h2>Authentication Error</h2>
+        <p>Error: {error}</p>
+        <p><a href="/miniapp?session={session or 'unknown'}">Try Again</a></p>
+        </body></html>
+        """, status_code=400)
+    
+    # For now, redirect to miniapp with session parameter
+    session_id = session or state or "unknown"
+    return RedirectResponse(f"/miniapp?session={session_id}")
 
 
 @app.get("/miniapp")
