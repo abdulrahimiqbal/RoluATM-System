@@ -691,6 +691,7 @@ async def root():
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@0.0.44/dist/minikit.js"></script>
+    <script src="https://minikit.world.org/v1/minikit.js"></script>
 </head>
 <body>
     <div class="container">
