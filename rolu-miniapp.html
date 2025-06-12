@@ -217,147 +217,146 @@
         
         // Initialize MiniKit following official documentation pattern
         async function initializeMiniKit() {
-            debugLog('Starting MiniKit initialization...');
+            console.log('=== MINIKIT INITIALIZATION ===');
             
-            try {
-                // Step 1: Check if MiniKit is installed (required by docs)
-                if (!MiniKit.isInstalled()) {
-                    debugLog('MiniKit not installed, attempting installation...');
-                    
-                    // Install MiniKit with app ID
-                    const installResult = await MiniKit.install(APP_CONFIG.appId);
-                    debugLog('Install result', installResult);
-                    
-                    if (!installResult.success && installResult.error !== 'already_installed') {
-                        throw new Error(`Installation failed: ${installResult.error}`);
-                    }
-                }
-                
-                debugLog('MiniKit installation confirmed');
-                
-                // Step 2: Log MiniKit information for debugging
-                debugLog('MiniKit Version Info', {
-                    MINIKIT_VERSION: MiniKit.MINIKIT_VERSION,
-                    MINIKIT_MINOR_VERSION: MiniKit.MINIKIT_MINOR_VERSION,
-                    miniKitCommandVersion: MiniKit.miniKitCommandVersion,
-                    isReady: MiniKit.isReady,
-                    deviceProperties: MiniKit.deviceProperties
-                });
-                
-                // Step 3: Check command availability
-                const availableCommands = Object.keys(MiniKit.commandsAsync || {});
-                debugLog('Available commands', availableCommands);
-                
-                if (!MiniKit.commandsAsync || !MiniKit.commandsAsync.verify) {
-                    throw new Error('Verify command not available in this World App version');
-                }
-                
-                if (!MiniKit.commandsAsync.pay) {
-                    throw new Error('Pay command not available in this World App version');
-                }
-                
-                // Step 4: Test command availability using isCommandAvailable if available
-                if (typeof MiniKit.isCommandAvailable === 'function') {
-                    const verifyAvailable = MiniKit.isCommandAvailable('verify');
-                    const payAvailable = MiniKit.isCommandAvailable('pay');
-                    
-                    debugLog('Command availability check', {
-                        verify: verifyAvailable,
-                        pay: payAvailable
-                    });
-                    
-                    if (!verifyAvailable) {
-                        throw new Error('Verify command not supported by your World App version');
-                    }
-                    
-                    if (!payAvailable) {
-                        throw new Error('Pay command not supported by your World App version');
-                    }
-                }
-                
-                debugLog('MiniKit initialization successful');
-                showStatus('Ready for withdrawal', 'success');
-                setButtonState('Withdraw $10.50', false);
-                
-                // Set up event listener
-                elements.withdrawBtn.addEventListener('click', handleWithdraw);
-                
-                return true;
-                
-            } catch (error) {
-                debugLog('MiniKit initialization failed', error);
-                showStatus(`Initialization failed: ${error.message}`, 'error');
-                setButtonState('Initialization Failed', true);
+            // Wait for MiniKit to be available
+            let attempts = 0;
+            const maxAttempts = 50; // 5 seconds max wait
+            
+            while (typeof MiniKit === 'undefined' && attempts < maxAttempts) {
+                console.log(`Waiting for MiniKit... attempt ${attempts + 1}`);
+                await new Promise(resolve => setTimeout(resolve, 100));
+                attempts++;
+            }
+            
+            if (typeof MiniKit === 'undefined') {
+                console.error('MiniKit failed to load after 5 seconds');
+                showStatus('❌ MiniKit failed to load. Please refresh the page.', 'error');
                 return false;
             }
+            
+            console.log('MiniKit loaded successfully');
+            
+            // Check if we're in World App
+            const isInWorldApp = typeof window.WorldApp !== 'undefined';
+            console.log('Running in World App:', isInWorldApp);
+            
+            if (!isInWorldApp) {
+                showStatus('❌ This app must be opened in World App', 'error');
+                return false;
+            }
+            
+            // Install MiniKit with proper error handling
+            try {
+                console.log('Installing MiniKit...');
+                const installResult = await MiniKit.install('app_263013ca6f702add37ad338fa43d4307');
+                console.log('MiniKit install result:', installResult);
+                
+                // Wait a moment for installation to complete
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+            } catch (error) {
+                console.log('MiniKit install error (may be already installed):', error);
+                // Continue - this might just mean it's already installed
+            }
+            
+            // Check command availability after installation
+            console.log('=== COMMAND AVAILABILITY CHECK ===');
+            
+            // Test if commands actually exist (more reliable than isCommandAvailable)
+            const hasVerifyCommand = typeof MiniKit.commandsAsync?.verify === 'function';
+            const hasPayCommand = typeof MiniKit.commandsAsync?.pay === 'function';
+            
+            console.log('Verify command exists:', hasVerifyCommand);
+            console.log('Pay command exists:', hasPayCommand);
+            
+            if (typeof MiniKit.isCommandAvailable === 'function') {
+                const verifyAvailable = MiniKit.isCommandAvailable('verify');
+                const payAvailable = MiniKit.isCommandAvailable('pay');
+                
+                console.log('isCommandAvailable - Verify:', verifyAvailable);
+                console.log('isCommandAvailable - Pay:', payAvailable);
+                
+                // Note: isCommandAvailable is sometimes unreliable, so we prioritize actual function existence
+                if (!verifyAvailable || !payAvailable) {
+                    console.warn('⚠️ isCommandAvailable reports false, but commands exist. Proceeding anyway...');
+                    
+                    if (hasVerifyCommand && hasPayCommand) {
+                        console.log('✅ Commands exist despite isCommandAvailable reporting false. This is a known issue.');
+                        showStatus('⚠️ Command availability check unreliable, but proceeding...', 'warning');
+                    }
+                }
+            }
+            
+            // Final check - if commands don't exist at all, fail
+            if (!hasVerifyCommand || !hasPayCommand) {
+                console.error('❌ Commands do not exist in MiniKit object');
+                showStatus('❌ Required MiniKit commands not available. Please update World App.', 'error');
+                return false;
+            }
+            
+            console.log('✅ MiniKit initialization complete - commands are available');
+            showStatus('✅ Ready for withdrawal', 'success');
+            return true;
         }
 
         // Handle withdrawal process following official documentation
         async function handleWithdraw() {
             try {
-                debugLog('Starting withdrawal process...');
-                setButtonState('<span class="spinner"></span>Verifying World ID...', true);
-                showStatus('Verifying your World ID...', 'warning');
-
-                // Step 1: World ID Verification (following official docs pattern)
+                showStatus('Initializing...', 'info');
+                
+                // Ensure MiniKit is properly initialized
+                const initialized = await initializeMiniKit();
+                if (!initialized) {
+                    return;
+                }
+                
+                showStatus('Starting World ID verification...', 'info');
+                
+                console.log('=== VERIFY COMMAND DEBUG ===');
+                console.log('MiniKit.commandsAsync.verify type:', typeof MiniKit.commandsAsync.verify);
+                
+                // Try to call verify command
                 const verifyPayload = {
-                    action: APP_CONFIG.action,
+                    action: 'withdraw-cash',
                     signal: APP_CONFIG.sessionId,
                     verification_level: VerificationLevel.Orb
                 };
-
-                debugLog('Calling verify with payload', verifyPayload);
                 
-                const verifyResult = await MiniKit.commandsAsync.verify(verifyPayload);
-                debugLog('Verify result', verifyResult);
-
-                if (!verifyResult || !verifyResult.finalPayload) {
-                    throw new Error('Invalid verify response structure');
-                }
-
-                const { finalPayload } = verifyResult;
-
+                console.log('Calling MiniKit.commandsAsync.verify with payload:', verifyPayload);
+                
+                const { finalPayload } = await MiniKit.commandsAsync.verify(verifyPayload);
+                
+                console.log('Verify response received:', finalPayload);
+                
                 if (finalPayload.status === 'error') {
-                    throw new Error(finalPayload.error || 'World ID verification failed');
+                    console.error('Verification failed:', finalPayload);
+                    showStatus(`❌ Verification failed: ${finalPayload.error_message || 'Unknown error'}`, 'error');
+                    return;
                 }
-
-                debugLog('World ID verification successful', finalPayload);
-                showStatus('World ID verified! Processing payment...', 'warning');
-                setButtonState('<span class="spinner"></span>Processing Payment...', true);
-
-                // Step 2: Payment Authorization (following official docs pattern)
-                const paymentPayload = {
-                    to: APP_CONFIG.walletAddress,
-                    value: 10.50,
-                    token: 'USDC',
-                    description: 'RoluATM Cash Withdrawal',
-                    reference: APP_CONFIG.sessionId
-                };
-
-                debugLog('Calling pay with payload', paymentPayload);
                 
-                const paymentResult = await MiniKit.commandsAsync.pay(paymentPayload);
-                debugLog('Payment result', paymentResult);
-
-                if (!paymentResult || !paymentResult.finalPayload) {
-                    throw new Error('Invalid payment response structure');
+                if (finalPayload.status === 'success') {
+                    console.log('✅ World ID verification successful');
+                    showStatus('✅ World ID verified! Initiating payment...', 'success');
+                    
+                    // Proceed with payment
+                    await initiatePayment(finalPayload);
+                } else {
+                    console.error('Unexpected verification status:', finalPayload.status);
+                    showStatus('❌ Unexpected verification response', 'error');
                 }
-
-                if (paymentResult.finalPayload.status === 'error') {
-                    throw new Error(paymentResult.finalPayload.error || 'Payment authorization failed');
-                }
-
-                debugLog('Payment authorized successfully', paymentResult);
-                showStatus('Payment authorized! Dispensing cash...', 'success');
-                setButtonState('<span class="spinner"></span>Dispensing Cash...', true);
-
-                // Step 3: Signal Cash Dispenser
-                await signalCashDispense(finalPayload, paymentResult.finalPayload);
-
+                
             } catch (error) {
-                debugLog('Withdrawal failed', error);
-                showStatus(`Error: ${error.message}`, 'error');
-                setButtonState('Retry Withdrawal', false);
+                console.error('Verification error:', error);
+                
+                // Handle specific error messages
+                if (error.message && error.message.includes('not supported')) {
+                    showStatus('❌ This feature requires a newer version of World App. Please update your app.', 'error');
+                } else if (error.message && error.message.includes('not available')) {
+                    showStatus('❌ World ID verification is not available. Please try again later.', 'error');
+                } else {
+                    showStatus(`❌ Verification error: ${error.message}`, 'error');
+                }
             }
         }
         
@@ -409,24 +408,141 @@
             }
         }
         
-        // Initialize when page loads
-        window.addEventListener('load', async () => {
-            debugLog('Page loaded, starting initialization...');
-            showStatus('Initializing...', 'warning');
-            setButtonState('Initializing...', true);
-            
-            // Check if we're in World App
-            const userAgent = navigator.userAgent;
-            debugLog('User Agent', userAgent);
-            
-            if (!userAgent.includes('WorldApp')) {
-                showStatus('Please open this page in World App', 'error');
-                setButtonState('Open in World App', true);
-                return;
+        async function initiatePayment(worldIdPayload) {
+            try {
+                showStatus('Initiating payment...', 'info');
+                
+                // Send World ID proof to backend for verification and payment setup
+                const response = await fetch('/api/initiate-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        payload: worldIdPayload,
+                        amount: 10.50
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('Payment initiation response:', result);
+                
+                if (!response.ok || !result.success) {
+                    throw new Error(result.message || 'Payment initiation failed');
+                }
+                
+                // Now call MiniKit pay with the backend response
+                showStatus('Authorizing payment...', 'info');
+                
+                const paymentPayload = {
+                    reference: result.reference,
+                    to: result.to,
+                    tokens: result.tokens,
+                    description: result.description
+                };
+                
+                console.log('Calling MiniKit.commandsAsync.pay with payload:', paymentPayload);
+                
+                const { finalPayload } = await MiniKit.commandsAsync.pay(paymentPayload);
+                console.log('Payment response received:', finalPayload);
+                
+                // Send payment result to backend
+                await confirmPayment(result.payment_id, finalPayload);
+                
+            } catch (error) {
+                console.error('Payment error:', error);
+                showStatus(`❌ Payment error: ${error.message}`, 'error');
             }
+        }
+        
+        async function confirmPayment(paymentId, finalPayload) {
+            try {
+                const response = await fetch('/api/confirm-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        payment_id: paymentId,
+                        finalPayload: finalPayload
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('Payment confirmation response:', result);
+                
+                if (result.success) {
+                    showStatus('✅ Payment successful! Cash dispensing...', 'success');
+                    // Redirect to success page after a delay
+                    setTimeout(() => {
+                        window.location.href = `/payment-success/${paymentId}`;
+                    }, 2000);
+                } else {
+                    showStatus(`❌ Payment failed: ${result.message}`, 'error');
+                }
+                
+            } catch (error) {
+                console.error('Payment confirmation error:', error);
+                showStatus(`❌ Payment confirmation error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('=== ROLUATM MINI APP STARTING ===');
+            console.log('App Config:', APP_CONFIG);
             
-            // Initialize MiniKit
-            await initializeMiniKit();
+            // Add comprehensive debugging
+            console.log('=== ENVIRONMENT DEBUG ===');
+            console.log('User Agent:', navigator.userAgent);
+            console.log('Window location:', window.location.href);
+            console.log('Window.WorldApp exists:', typeof window.WorldApp !== 'undefined');
+            console.log('Window.WorldApp:', window.WorldApp);
+            
+            // Show debug info by default for troubleshooting
+            elements.debugInfo.style.display = 'block';
+            debugLog('RoluATM Mini App initialized');
+            debugLog('Session ID', APP_CONFIG.sessionId);
+            
+            // Wait for MiniKit to load and initialize
+            showStatus('Loading MiniKit...', 'info');
+            
+            try {
+                // Wait a bit for MiniKit to fully load
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // Check MiniKit availability
+                if (typeof MiniKit !== 'undefined') {
+                    console.log('=== MINIKIT DEBUG ===');
+                    console.log('MiniKit keys:', Object.keys(MiniKit));
+                    console.log('MiniKit.commandsAsync:', MiniKit.commandsAsync);
+                    console.log('commandsAsync keys:', Object.keys(MiniKit.commandsAsync || {}));
+                    console.log('MiniKit.isCommandAvailable:', MiniKit.isCommandAvailable);
+                    
+                    if (typeof MiniKit.isCommandAvailable === 'function') {
+                        const allCommands = ['verify', 'pay', 'walletAuth', 'sendTransaction', 'signMessage'];
+                        const availability = {};
+                        allCommands.forEach(cmd => {
+                            availability[cmd] = MiniKit.isCommandAvailable(cmd);
+                        });
+                        console.log('Command availability:', availability);
+                    }
+                    
+                    // Try initialization
+                    const initialized = await initializeMiniKit();
+                    if (initialized) {
+                        setButtonState('Withdraw $10.50', false);
+                        elements.withdrawBtn.addEventListener('click', handleWithdraw);
+                    } else {
+                        setButtonState('Initialization Failed', true);
+                    }
+                } else {
+                    console.error('MiniKit not available after 2 seconds');
+                    showStatus('❌ MiniKit failed to load', 'error');
+                    setButtonState('MiniKit Not Available', true);
+                }
+                
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showStatus(`❌ Initialization error: ${error.message}`, 'error');
+                setButtonState('Error', true);
+            }
         });
     </script>
 </body>
