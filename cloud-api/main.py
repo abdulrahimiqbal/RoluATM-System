@@ -544,6 +544,7 @@ async def root():
     <link rel="icon" type="image/png" href="/favicon.png">
     
     <style>
+        /* Using double curly braces to escape for Python's .format() */
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             margin: 0;
@@ -631,7 +632,6 @@ async def root():
             try {{
                 elements.withdrawBtn.disabled = true;
                 
-                // Step 1: Frontend - Get World ID proof
                 showStatus('🔍 Verifying you are a unique human...', 'warning');
                 elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Verifying...';
                 
@@ -643,7 +643,6 @@ async def root():
 
                 if (!worldIdPayload.success) throw new Error('World ID verification was cancelled.');
 
-                // Step 2: Backend - Verify World ID proof
                 showStatus('🔐 Securely verifying proof...', 'warning');
                 const verifyResponse = await fetch('/api/verify-world-id', {{
                     method: 'POST',
@@ -659,7 +658,6 @@ async def root():
                     throw new Error(error.detail || 'Backend verification failed.');
                 }}
                 
-                // Step 3: Backend - Initiate Payment
                 showStatus('💳 Initializing payment...', 'warning');
                 elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Preparing...';
                 const initResponse = await fetch('/api/initiate-payment', {{
@@ -674,7 +672,6 @@ async def root():
                 }}
                 const {{ reference, to_address }} = await initResponse.json();
 
-                // Step 4: Frontend - Authorize Payment
                 showStatus('💰 Please approve the transaction in your wallet...', 'warning');
                 const paymentPayload = {{
                     reference: reference,
@@ -686,7 +683,6 @@ async def root():
                 const paymentResponse = await MiniKit.commands.pay(paymentPayload);
                 if (!paymentResponse.success) throw new Error('Payment was cancelled.');
 
-                // Step 5: Backend - Confirm Payment on-chain
                 showStatus('🔗 Confirming transaction on the blockchain...', 'warning');
                 elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Confirming...';
                 const confirmResponse = await fetch('/api/confirm-payment', {{
@@ -700,7 +696,6 @@ async def root():
                     throw new Error(error.detail || 'Could not confirm payment.');
                 }}
                 
-                // Final Step: Dispense Cash
                 showStatus('✅ Payment confirmed! Dispensing cash...', 'success');
                 elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Dispensing...';
                 await signalCashDispense();
@@ -714,7 +709,6 @@ async def root():
         }}
 
         async function signalCashDispense() {{
-            // This function remains the same...
             try {{
                 const response = await fetch('https://rolu-atm-system.vercel.app/confirm-withdrawal', {{
                     method: 'POST',
