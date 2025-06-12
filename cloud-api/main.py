@@ -536,6 +536,8 @@ async def root():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RoluATM</title>
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
     <style>
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: #f2f2f7; }}
         .container {{ text-align: center; background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
@@ -642,41 +644,74 @@ async def root():
                 return;
             }}
             
-            console.log('MiniKit object available:', MiniKit);
+            // Comprehensive debugging
+            console.log('=== MINIKIT DEBUG INFO ===');
+            console.log('MiniKit object:', MiniKit);
+            console.log('MiniKit keys:', Object.keys(MiniKit));
+            console.log('MiniKit.isInstalled:', typeof MiniKit.isInstalled, MiniKit.isInstalled);
             console.log('User agent:', navigator.userAgent);
-            console.log('MiniKit.isInstalled():', MiniKit.isInstalled());
+            console.log('Window location:', window.location.href);
+            console.log('Document referrer:', document.referrer);
+            console.log('Window.parent === window:', window.parent === window);
             
-            // Check if MiniKit is properly installed (running in World App)
-            if (!MiniKit.isInstalled()) {{
-                // Additional checks for World App environment
-                const userAgent = navigator.userAgent || '';
-                const isLikelyWorldApp = userAgent.includes('WorldApp') || 
-                                       userAgent.includes('World') || 
-                                       window.location.href.includes('worldapp://') ||
-                                       window.parent !== window; // In iframe/webview
-                
-                if (isLikelyWorldApp) {{
-                    console.log('Detected World App environment, but MiniKit.isInstalled() returned false');
-                    showStatus('🔄 Initializing World App connection...', 'info');
-                    // Try to proceed anyway - sometimes isInstalled() is unreliable
-                    setTimeout(() => {{
-                        if (typeof MiniKit !== 'undefined') {{
-                            console.log('Proceeding with MiniKit despite isInstalled() = false');
-                            initializeApp();
-                        }} else {{
-                            showStatus('❌ Error: Please open this page in the World App.', 'error');
-                        }}
-                    }}, 1000);
-                    return;
-                }} else {{
-                    showStatus('❌ Error: Please open this page in the World App.', 'error');
-                    console.error('MiniKit is not installed - not running in World App.');
-                    return;
-                }}
+            // Try calling isInstalled and log the result
+            let isInstalledResult;
+            try {{
+                isInstalledResult = MiniKit.isInstalled();
+                console.log('MiniKit.isInstalled() result:', isInstalledResult);
+            }} catch (e) {{
+                console.error('Error calling MiniKit.isInstalled():', e);
+                isInstalledResult = false;
             }}
             
-            console.log('MiniKit is properly installed and ready');
-            initializeApp();
+            // Show debug info on screen
+            const debugInfo = `
+                <div style="font-size: 12px; text-align: left; margin: 10px 0; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+                    <strong>Debug Info:</strong><br>
+                    MiniKit available: ${{typeof MiniKit !== 'undefined'}}<br>
+                    isInstalled(): ${{isInstalledResult}}<br>
+                    User Agent: ${{navigator.userAgent.substring(0, 50)}}...<br>
+                    In iframe: ${{window.parent !== window}}<br>
+                    Referrer: ${{document.referrer || 'none'}}
+                </div>
+            `;
+            
+            // Check if MiniKit is properly installed (running in World App)
+            if (!isInstalledResult) {{
+                // Check for World App indicators in user agent or environment
+                const userAgent = navigator.userAgent.toLowerCase();
+                const isWorldApp = userAgent.includes('worldapp') || 
+                                 userAgent.includes('world app') ||
+                                 window.location.href.includes('worldapp.org') ||
+                                 document.referrer.includes('worldapp.org');
+                
+                if (isWorldApp) {{
+                    showStatus(`⚠️ Detected World App environment but MiniKit.isInstalled() returned false. Attempting to proceed anyway...${{debugInfo}}`, 'info');
+                    console.log('World App detected in environment, proceeding despite isInstalled() = false');
+                    // Wait a bit longer and try to initialize anyway
+                    setTimeout(() => {{
+                        try {{
+                            console.log('Attempting to initialize app despite isInstalled() = false');
+                            initializeApp();
+                        }} catch (e) {{
+                            console.error('Failed to initialize app:', e);
+                            showStatus(`❌ Error: Failed to initialize: ${{e.message}}${{debugInfo}}`, 'error');
+                        }}
+                    }}, 2000);
+                }} else {{
+                    showStatus(`❌ Error: Please open this page in the World App.${{debugInfo}}`, 'error');
+                    console.error('MiniKit is not installed - not running in World App.');
+                }}
+                return;
+            }}
+            
+            try {{
+                console.log('MiniKit detected as installed, initializing app...');
+                initializeApp();
+            }} catch (e) {{
+                console.error('Error during MiniKit initialization:', e);
+                showStatus(`❌ Error: Initialization failed: ${{e.message}}${{debugInfo}}`, 'error');
+            }}
         }}
 
         window.addEventListener('load', () => {{
