@@ -248,7 +248,7 @@
             console.log('typeof window.MiniKit:', typeof window.MiniKit);
             
             if (window.WorldApp) {
-                console.log('✅ WorldApp found! Using native WorldApp API');
+                console.log('✅ WorldApp found! Checking for MiniKit...');
                 console.log('Supported commands:', window.WorldApp.supported_commands);
                 
                 // Check if verify and pay commands are supported
@@ -258,48 +258,55 @@
                 console.log('Verify command supported:', !!verifySupported);
                 console.log('Pay command supported:', !!paySupported);
                 
-                if (verifySupported && paySupported) {
-                    console.log('✅ Setting up withdraw button...');
+                // Try to find MiniKit in different locations
+                const miniKitLocations = [
+                    window.MiniKit,
+                    window.WorldApp.MiniKit,
+                    window.parent?.MiniKit,
+                    window.top?.MiniKit
+                ];
+                
+                let foundMiniKit = null;
+                miniKitLocations.forEach((location, index) => {
+                    if (location) {
+                        console.log(`Found MiniKit at location ${index}:`, location);
+                        foundMiniKit = location;
+                    }
+                });
+                
+                if (foundMiniKit && foundMiniKit.commandsAsync) {
+                    console.log('✅ MiniKit.commandsAsync found!');
                     setButtonState('Withdraw $10.50', false);
                     showStatus('Ready to withdraw. Click to verify with World ID.', 'success');
                     
                     // Add click event listener with debugging
                     console.log('Adding click event listener to withdraw button...');
                     const withdrawBtn = document.getElementById('withdraw-btn');
-                    console.log('Withdraw button element:', withdrawBtn);
-                    console.log('Button disabled state:', withdrawBtn?.disabled);
                     
                     if (withdrawBtn) {
-                        // Remove any existing listeners first
-                        withdrawBtn.removeEventListener('click', handleWithdrawWithWorldApp);
-                        
-                        // Add new listener with debugging
                         withdrawBtn.addEventListener('click', function(event) {
                             console.log('🔥 BUTTON CLICKED! Event:', event);
-                            console.log('Button element at click:', event.target);
-                            console.log('Button disabled at click:', event.target.disabled);
-                            
-                            // Prevent default and call handler
                             event.preventDefault();
                             event.stopPropagation();
-                            
-                            console.log('Calling handleWithdrawWithWorldApp...');
-                            handleWithdrawWithWorldApp();
+                            console.log('Calling handleWithdrawWithMiniKit...');
+                            handleWithdrawWithMiniKit(foundMiniKit);
                         });
-                        
                         console.log('✅ Click event listener added successfully');
-                        
-                        // Test button responsiveness
-                        console.log('Testing button click programmatically...');
-                        setTimeout(() => {
-                            console.log('Button test - current state:', {
-                                disabled: withdrawBtn.disabled,
-                                innerHTML: withdrawBtn.innerHTML,
-                                style: withdrawBtn.style.cssText
-                            });
-                        }, 1000);
-                    } else {
-                        console.error('❌ Could not find withdraw button element!');
+                    }
+                } else if (verifySupported && paySupported) {
+                    // Fallback: Try to use postMessage to communicate with World App
+                    console.log('⚠️ MiniKit not found, trying postMessage approach...');
+                    setButtonState('Withdraw $10.50', false);
+                    showStatus('Ready to withdraw. Click to verify with World ID.', 'success');
+                    
+                    const withdrawBtn = document.getElementById('withdraw-btn');
+                    if (withdrawBtn) {
+                        withdrawBtn.addEventListener('click', function(event) {
+                            console.log('🔥 BUTTON CLICKED! Using postMessage approach');
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handleWithdrawWithPostMessage();
+                        });
                     }
                 } else {
                     showStatus('❌ Required commands not supported by this World App version', 'error');
@@ -364,31 +371,132 @@
             sessionId: new URLSearchParams(window.location.search).get('session') || 'demo-session-' + Date.now()
         };
         
-        // New function to handle withdrawal using native WorldApp API
-        async function handleWithdrawWithWorldApp() {
+        // New function to handle withdrawal using MiniKit SDK
+        async function handleWithdrawWithMiniKit(miniKit) {
             try {
-                console.log('=== WITHDRAW ATTEMPT WITH WORLDAPP ===');
-                console.log('Using native WorldApp API');
+                console.log('=== WITHDRAW ATTEMPT WITH MINIKIT ===');
+                console.log('Using MiniKit SDK:', miniKit);
                 
                 showStatus('Starting World ID verification...', 'info');
                 setButtonState('<span class="spinner"></span>Verifying...', true);
 
-                // Use native WorldApp API for verification
-                const verifyResult = await window.WorldApp.request({
-                    command: 'verify',
+                // Use MiniKit SDK for verification
+                const { finalPayload: verifyFinalPayload } = await miniKit.commandsAsync.verify({
                     action: APP_CONFIG.action,
                     signal: APP_CONFIG.sessionId,
                     verification_level: 'orb'
                 });
 
-                console.log('Verify result:', verifyResult);
+                console.log('Verify result:', verifyFinalPayload);
 
-                if (verifyResult.status === 'error') {
-                    throw new Error(verifyResult.error_message || 'World ID verification was rejected or failed.');
+                if (verifyFinalPayload.status === 'error') {
+                    throw new Error(verifyFinalPayload.error_message || 'World ID verification was rejected or failed.');
                 }
                 
                 showStatus('✅ World ID verified! Preparing payment...', 'success');
 
+                const initiateResponse = await fetch('/api/initiate-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        payload: verifyFinalPayload,
+                        amount: 10.50
+                    })
+                });
+
+                const paymentData = await initiateResponse.json();
+                if (!initiateResponse.ok || !paymentData.success) {
+                    throw new Error(paymentData.detail || 'Failed to initiate payment on the server.');
+                }
+                
+                showStatus('Please confirm the payment in World App...', 'info');
+
+                // Use MiniKit SDK for payment
+                const { finalPayload: payFinalPayload } = await miniKit.commandsAsync.pay({
+                    reference: paymentData.reference,
+                    to: paymentData.to,
+                    tokens: paymentData.tokens,
+                    description: paymentData.description
+                });
+                
+                console.log('Pay result:', payFinalPayload);
+                
+                const confirmResponse = await fetch('/api/confirm-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        payment_id: paymentData.payment_id,
+                        finalPayload: payFinalPayload
+                    })
+                });
+
+                const confirmData = await confirmResponse.json();
+                if (!confirmResponse.ok || !confirmData.success) {
+                    throw new Error(confirmData.message || 'Payment confirmation failed on the server.');
+                }
+
+                showStatus(`✅ Payment successful! Tx: ${confirmData.tx_hash.substring(0, 10)}...`, 'success');
+                setButtonState('Done!', true);
+
+            } catch (error) {
+                console.error('Withdrawal Error:', error);
+                showStatus(`❌ Error: ${error.message}`, 'error');
+                setButtonState('Try Again', false);
+                updateDebugInfo();
+            }
+        }
+        
+        // Fallback function using postMessage approach
+        async function handleWithdrawWithPostMessage() {
+            try {
+                console.log('=== WITHDRAW ATTEMPT WITH POSTMESSAGE ===');
+                console.log('Using postMessage to communicate with World App');
+                
+                showStatus('Starting World ID verification...', 'info');
+                setButtonState('<span class="spinner"></span>Verifying...', true);
+
+                // Try postMessage approach for verification
+                const verifyPromise = new Promise((resolve, reject) => {
+                    const messageHandler = (event) => {
+                        console.log('Received message:', event.data);
+                        if (event.data.eventType === 'verify_result') {
+                            window.removeEventListener('message', messageHandler);
+                            if (event.data.eventData.status === 'success') {
+                                resolve(event.data.eventData);
+                            } else {
+                                reject(new Error(event.data.eventData.error_message || 'Verification failed'));
+                            }
+                        }
+                    };
+                    
+                    window.addEventListener('message', messageHandler);
+                    
+                    // Send verify command via postMessage
+                    const verifyMessage = {
+                        eventType: 'verify',
+                        eventData: {
+                            action: APP_CONFIG.action,
+                            signal: APP_CONFIG.sessionId,
+                            verification_level: 'orb'
+                        }
+                    };
+                    
+                    console.log('Sending verify message:', verifyMessage);
+                    window.parent.postMessage(JSON.stringify(verifyMessage), '*');
+                    
+                    // Timeout after 30 seconds
+                    setTimeout(() => {
+                        window.removeEventListener('message', messageHandler);
+                        reject(new Error('Verification timeout'));
+                    }, 30000);
+                });
+
+                const verifyResult = await verifyPromise;
+                console.log('Verify result:', verifyResult);
+                
+                showStatus('✅ World ID verified! Preparing payment...', 'success');
+                
+                // Continue with backend payment flow...
                 const initiateResponse = await fetch('/api/initiate-payment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -405,15 +513,42 @@
                 
                 showStatus('Please confirm the payment in World App...', 'info');
 
-                // Use native WorldApp API for payment
-                const payResult = await window.WorldApp.request({
-                    command: 'pay',
-                    reference: paymentData.reference,
-                    to: paymentData.to,
-                    tokens: paymentData.tokens,
-                    description: paymentData.description
+                // Try postMessage approach for payment
+                const payPromise = new Promise((resolve, reject) => {
+                    const messageHandler = (event) => {
+                        console.log('Received payment message:', event.data);
+                        if (event.data.eventType === 'pay_result') {
+                            window.removeEventListener('message', messageHandler);
+                            if (event.data.eventData.status === 'success') {
+                                resolve(event.data.eventData);
+                            } else {
+                                reject(new Error(event.data.eventData.error_message || 'Payment failed'));
+                            }
+                        }
+                    };
+                    
+                    window.addEventListener('message', messageHandler);
+                    
+                    const payMessage = {
+                        eventType: 'pay',
+                        eventData: {
+                            reference: paymentData.reference,
+                            to: paymentData.to,
+                            tokens: paymentData.tokens,
+                            description: paymentData.description
+                        }
+                    };
+                    
+                    console.log('Sending pay message:', payMessage);
+                    window.parent.postMessage(JSON.stringify(payMessage), '*');
+                    
+                    setTimeout(() => {
+                        window.removeEventListener('message', messageHandler);
+                        reject(new Error('Payment timeout'));
+                    }, 30000);
                 });
-                
+
+                const payResult = await payPromise;
                 console.log('Pay result:', payResult);
                 
                 const confirmResponse = await fetch('/api/confirm-payment', {
@@ -437,7 +572,7 @@
                 console.error('Withdrawal Error:', error);
                 showStatus(`❌ Error: ${error.message}`, 'error');
                 setButtonState('Try Again', false);
-                updateDebugInfo(); // Update debug info on error
+                updateDebugInfo();
             }
         }
         
