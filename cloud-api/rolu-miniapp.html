@@ -250,6 +250,7 @@
             console.log('Page loaded at:', new Date().toISOString());
             console.log('User Agent:', navigator.userAgent);
             console.log('URL:', window.location.href);
+            console.log('🔄 Cache bust:', Date.now()); // Force fresh deployment
             
             // Check for World App objects
             console.log('window.WorldApp exists:', !!window.WorldApp);
