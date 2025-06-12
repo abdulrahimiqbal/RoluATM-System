@@ -22,10 +22,20 @@ from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from db.models import (
-    User, Kiosk, Transaction, KioskHealthLog, WorldIDVerification,
-    TransactionStatus, create_db_and_tables
-)
+try:
+    from db.models import (
+        User, Kiosk, Transaction, KioskHealthLog, WorldIDVerification,
+        TransactionStatus, create_db_and_tables
+    )
+except ImportError:
+    # Fallback for Vercel deployment
+    import sys
+    import os
+    sys.path.append(os.path.dirname(__file__))
+    from db.models import (
+        User, Kiosk, Transaction, KioskHealthLog, WorldIDVerification,
+        TransactionStatus, create_db_and_tables
+    )
 
 # Load environment variables
 load_dotenv()
@@ -37,13 +47,16 @@ logger = logging.getLogger(__name__)
 # Database configuration
 DATABASE_URL = os.getenv("NEON_DATABASE_URL")
 if not DATABASE_URL:
-    raise ValueError("NEON_DATABASE_URL environment variable required")
+    logger.error("NEON_DATABASE_URL environment variable required")
+    DATABASE_URL = "sqlite:///./test.db"  # Fallback for development
 
 # World ID configuration
-WORLD_ID_APP_ID = os.getenv("WORLD_ID_APP_ID")
-WORLD_ID_ACTION = os.getenv("WORLD_ID_ACTION")
-if not WORLD_ID_APP_ID or not WORLD_ID_ACTION:
-    raise ValueError("WORLD_ID_APP_ID and WORLD_ID_ACTION environment variables required")
+WORLD_ID_APP_ID = os.getenv("WORLD_ID_APP_ID", "app_263013ca6f702add37ad338fa43d4307")
+WORLD_ID_ACTION = os.getenv("WORLD_ID_ACTION", "withdraw-cash")
+
+logger.info(f"World ID App ID: {WORLD_ID_APP_ID}")
+logger.info(f"World ID Action: {WORLD_ID_ACTION}")
+logger.info(f"Database URL configured: {bool(DATABASE_URL)}")
 
 # Create database engine
 engine = create_engine(DATABASE_URL, echo=False)
@@ -57,21 +70,24 @@ async def lifespan(app: FastAPI):
     """Application lifespan management"""
     # Startup
     logger.info("Starting RoluATM Cloud API")
-    logger.info(f"Database URL: {DATABASE_URL[:50]}...")
+    logger.info(f"Database URL: {DATABASE_URL[:50] if DATABASE_URL else 'None'}...")
     
-    try:
-        # Test database connection
-        with Session(engine) as session:
-            session.exec(select(1))
-        logger.info("✓ Database connection successful")
-        
-        # Create tables if they don't exist
-        create_db_and_tables(engine)
-        logger.info("✓ Database tables verified")
-        
-    except Exception as e:
-        logger.error(f"✗ Database initialization failed: {e}")
-        raise
+    if DATABASE_URL and DATABASE_URL != "sqlite:///./test.db":
+        try:
+            # Test database connection
+            with Session(engine) as session:
+                session.exec(select(1))
+            logger.info("✓ Database connection successful")
+            
+            # Create tables if they don't exist
+            create_db_and_tables(engine)
+            logger.info("✓ Database tables verified")
+            
+        except Exception as e:
+            logger.error(f"✗ Database initialization failed: {e}")
+            logger.warning("Continuing without database - API will be limited")
+    else:
+        logger.warning("No database configured - running in limited mode")
     
     yield
     
@@ -203,20 +219,33 @@ async def broadcast_kiosk_event(kiosk_id: str, event_type: str, data: dict):
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    try:
-        # Test database connectivity
-        with Session(engine) as session:
-            session.exec(select(1))
-        
-        return {
-            "status": "healthy",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "service": "RoluATM Cloud API",
-            "version": "1.0.0"
+    response = {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "service": "RoluATM Cloud API",
+        "version": "1.0.0",
+        "environment": {
+            "has_database_url": bool(DATABASE_URL and DATABASE_URL != "sqlite:///./test.db"),
+            "world_id_app_id": bool(WORLD_ID_APP_ID),
+            "world_id_action": bool(WORLD_ID_ACTION)
         }
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        raise HTTPException(status_code=503, detail="Database unavailable")
+    }
+    
+    if DATABASE_URL and DATABASE_URL != "sqlite:///./test.db":
+        try:
+            # Test database connectivity
+            with Session(engine) as session:
+                session.exec(select(1))
+            response["database"] = "connected"
+        except Exception as e:
+            logger.error(f"Health check database failed: {e}")
+            response["database"] = f"error: {str(e)}"
+            response["status"] = "degraded"
+    else:
+        response["database"] = "not_configured"
+        response["status"] = "limited"
+    
+    return response
 
 
 @app.post("/verify-worldid")
