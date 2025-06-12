@@ -1,0 +1,11 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+sqlmodel==0.0.14
+psycopg2-binary==2.9.9
+python-dotenv==1.0.0
+pydantic==2.5.0
+python-multipart==0.0.6
+httpx==0.25.2
+cryptography==41.0.8
+python-jose[cryptography]==3.3.0
+sse-starlette==1.6.5 
