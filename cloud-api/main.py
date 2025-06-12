@@ -79,7 +79,7 @@ engine = None
 DATABASE_CONNECTED = False
 try:
     if DATABASE_URL and DATABASE_URL != "sqlite:///./test.db" and DB_MODELS_AVAILABLE:
-        engine = create_engine(DATABASE_URL, echo=False)
+engine = create_engine(DATABASE_URL, echo=False)
         DATABASE_CONNECTED = True
     else:
         logger.warning("Database engine not initialized - limited functionality")
@@ -261,9 +261,9 @@ async def initiate_payment(request: dict):
         raise HTTPException(status_code=400, detail="World ID payload is required")
     
     is_verified = await verify_world_id_proof(world_id_payload)
-    if not is_verified:
-        raise HTTPException(status_code=400, detail="World ID verification failed")
-
+        if not is_verified:
+            raise HTTPException(status_code=400, detail="World ID verification failed")
+        
     amount_usd = request.get("amount", 10.50)
     payment_id = f"rolu_{int(time.time())}_{uuid.uuid4().hex[:8]}"
     
@@ -276,7 +276,7 @@ async def initiate_payment(request: dict):
     }
     
     logger.info(f"Payment initiated - ID: {payment_id}, Amount: ${amount_usd}")
-
+    
     return {
         "success": True,
         "payment_id": payment_id,

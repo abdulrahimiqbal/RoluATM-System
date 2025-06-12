@@ -336,7 +336,7 @@
                                 if (window.MiniKit) {
                                     foundMiniKit = window.MiniKit;
                                     resolve(window.MiniKit);
-                                } else {
+            } else {
                                     reject(new Error('MiniKit still not available after script load'));
                                 }
                             };
@@ -482,86 +482,86 @@
                 console.error('❌ Could not find withdraw button for setButtonState');
             }
         }
-        
-        // Application configuration
-        const APP_CONFIG = {
-            appId: 'app_263013ca6f702add37ad338fa43d4307',
-            action: 'withdraw-cash',
-            walletAddress: '0x742fd484b63E7C9b7f34FAb65A8c165B7cd5C5e8',
-            sessionId: new URLSearchParams(window.location.search).get('session') || 'demo-session-' + Date.now()
-        };
-        
+
+            // Application configuration
+            const APP_CONFIG = {
+                appId: 'app_263013ca6f702add37ad338fa43d4307',
+                action: 'withdraw-cash',
+                walletAddress: '0x742fd484b63E7C9b7f34FAb65A8c165B7cd5C5e8',
+                sessionId: new URLSearchParams(window.location.search).get('session') || 'demo-session-' + Date.now()
+            };
+            
         // New function to handle withdrawal using MiniKit SDK
         async function handleWithdrawWithMiniKit(miniKit) {
             try {
                 console.log('=== WITHDRAW ATTEMPT WITH MINIKIT ===');
                 console.log('Using MiniKit SDK:', miniKit);
-                
-                showStatus('Starting World ID verification...', 'info');
-                setButtonState('<span class="spinner"></span>Verifying...', true);
+                    
+                    showStatus('Starting World ID verification...', 'info');
+                    setButtonState('<span class="spinner"></span>Verifying...', true);
 
                 // Use MiniKit SDK for verification
                 const { finalPayload: verifyFinalPayload } = await miniKit.commandsAsync.verify({
-                    action: APP_CONFIG.action,
-                    signal: APP_CONFIG.sessionId,
-                    verification_level: 'orb'
-                });
+                        action: APP_CONFIG.action,
+                        signal: APP_CONFIG.sessionId,
+                        verification_level: 'orb'
+                    });
 
                 console.log('Verify result:', verifyFinalPayload);
 
-                if (verifyFinalPayload.status === 'error') {
-                    throw new Error(verifyFinalPayload.error_message || 'World ID verification was rejected or failed.');
-                }
-                
-                showStatus('✅ World ID verified! Preparing payment...', 'success');
+                    if (verifyFinalPayload.status === 'error') {
+                        throw new Error(verifyFinalPayload.error_message || 'World ID verification was rejected or failed.');
+                    }
+                    
+                    showStatus('✅ World ID verified! Preparing payment...', 'success');
 
-                const initiateResponse = await fetch('/api/initiate-payment', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        payload: verifyFinalPayload,
-                        amount: 10.50
-                    })
-                });
+                    const initiateResponse = await fetch('/api/initiate-payment', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            payload: verifyFinalPayload,
+                            amount: 10.50
+                        })
+                    });
 
-                const paymentData = await initiateResponse.json();
-                if (!initiateResponse.ok || !paymentData.success) {
-                    throw new Error(paymentData.detail || 'Failed to initiate payment on the server.');
-                }
-                
-                showStatus('Please confirm the payment in World App...', 'info');
+                    const paymentData = await initiateResponse.json();
+                    if (!initiateResponse.ok || !paymentData.success) {
+                        throw new Error(paymentData.detail || 'Failed to initiate payment on the server.');
+                    }
+                    
+                    showStatus('Please confirm the payment in World App...', 'info');
 
                 // Use MiniKit SDK for payment
                 const { finalPayload: payFinalPayload } = await miniKit.commandsAsync.pay({
-                    reference: paymentData.reference,
-                    to: paymentData.to,
-                    tokens: paymentData.tokens,
-                    description: paymentData.description
-                });
+                        reference: paymentData.reference,
+                        to: paymentData.to,
+                        tokens: paymentData.tokens,
+                        description: paymentData.description
+                    });
                 
                 console.log('Pay result:', payFinalPayload);
-                
-                const confirmResponse = await fetch('/api/confirm-payment', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        payment_id: paymentData.payment_id,
-                        finalPayload: payFinalPayload
-                    })
-                });
+                    
+                    const confirmResponse = await fetch('/api/confirm-payment', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            payment_id: paymentData.payment_id,
+                            finalPayload: payFinalPayload
+                        })
+                    });
 
-                const confirmData = await confirmResponse.json();
-                if (!confirmResponse.ok || !confirmData.success) {
-                    throw new Error(confirmData.message || 'Payment confirmation failed on the server.');
-                }
+                    const confirmData = await confirmResponse.json();
+                    if (!confirmResponse.ok || !confirmData.success) {
+                        throw new Error(confirmData.message || 'Payment confirmation failed on the server.');
+                    }
 
-                showStatus(`✅ Payment successful! Tx: ${confirmData.tx_hash.substring(0, 10)}...`, 'success');
-                setButtonState('Done!', true);
+                    showStatus(`✅ Payment successful! Tx: ${confirmData.tx_hash.substring(0, 10)}...`, 'success');
+                    setButtonState('Done!', true);
 
-            } catch (error) {
-                console.error('Withdrawal Error:', error);
-                showStatus(`❌ Error: ${error.message}`, 'error');
-                setButtonState('Try Again', false);
+                } catch (error) {
+                    console.error('Withdrawal Error:', error);
+                    showStatus(`❌ Error: ${error.message}`, 'error');
+                    setButtonState('Try Again', false);
                 updateDebugInfo();
             }
         }
