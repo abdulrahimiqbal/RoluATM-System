@@ -1,278 +1,91 @@
-# RoluATM - Raspberry Pi ATM System
+# RoluATM Cloud API
 
-A production-ready ATM system with World ID integration, running on Raspberry Pi 4 with Telequip T-Flex coin mechanism.
+This project provides the cloud backend and mini-app interface for the RoluATM, a World ID-verified cryptocurrency ATM.
 
-## Architecture
+## 🚀 Features
 
-- **kiosk-pi**: Raspberry Pi 4 B running React touchscreen UI + Flask backend
-- **cloud-api**: Vercel-hosted FastAPI service with Neon Postgres database
+-   **World ID Integration**: Ensures each user can only perform actions a limited number of times, preventing abuse.
+-   **Secure Payments**: Integrated with World App for secure USDC transactions.
+-   **Real-time Kiosk Monitoring**: (Future) SSE endpoint for real-time updates from the ATM hardware.
+-   **FastAPI Backend**: Built with modern, high-performance Python.
 
-## Hardware Requirements
+## 🛠️ Setup and Installation
 
-### Main Components
-- Raspberry Pi 4 Model B (4GB+ RAM)
-- 7" Touchscreen Display (official RPi or compatible)
-- Telequip T-Flex coin mechanism
-- USB-C power supply (official RPi 4 power supply)
-- MicroSD card (32GB+, Class 10)
+### 1. Prerequisites
 
-### Wiring Diagram
+-   Python 3.9+
+-   A [Vercel](https://vercel.com) account for deployment.
+-   A [Worldcoin Developer Account](https://developer.worldcoin.org/).
+
+### 2. Environment Variables
+
+This project requires several environment variables to function correctly. Create a `.env` file in the root of your project:
 
 ```
-Raspberry Pi 4 GPIO Layout:
-┌─────────────────────────────────┐
-│ 1  2  3  4  5  6  7  8  9  10   │
-│ 11 12 13 14 15 16 17 18 19 20   │
-│ 21 22 23 24 25 26 27 28 29 30   │
-│ 31 32 33 34 35 36 37 38 39 40   │
-└─────────────────────────────────┘
+# .env file
 
-Telequip T-Flex Connections:
-- USB-CDC: Connect to any USB port (appears as /dev/ttyACM0)
-- Power: 12V DC supply (separate from Pi)
-- Coin Output: Gravity-fed to collection tray
+# --- Worldcoin Developer Portal ---
+# Your Application ID from the Worldcoin Developer Portal
+WORLD_ID_APP_ID="app_xxxxxxxxxxxxxxxxxxxxxxxx"
 
-Touchscreen:
-- DSI connector for display
-- USB for touch input
-- 5V power from Pi GPIO or USB
+# An Action ID created in the portal for the "withdraw-cash" action
+WORLD_ID_ACTION="withdraw-cash"
+
+# A Server-side API Key from the Worldcoin Developer Portal
+# This is a secret and should be kept safe!
+WORLD_API_KEY="wk_xxxxxxxxxxxxxxxxxxxxxxxx"
+
+
+# --- RoluATM Configuration ---
+# The public wallet address where the ATM will receive USDC funds
+ROLU_WALLET_ADDRESS="0x........................................"
+
+# (Optional) For production database connection
+# DATABASE_URL="postgresql://user:password@host:port/database"
 ```
 
-## Installation
+**Where to find these values:**
 
-### 1. Raspberry Pi Setup
+-   `WORLD_ID_APP_ID`: In your app's page on the Worldcoin Developer Portal.
+-   `WORLD_ID_ACTION`: Create a new, unique action in the "Actions" section of your app in the portal. Name it `withdraw-cash`.
+-   `WORLD_API_KEY`: Generate a new API key in the "Settings" of your app in the portal. Treat this like a password.
+-   `ROLU_WALLET_ADDRESS`: This is the public address of the wallet you control, which will receive the funds from users. **You must whitelist this address in the Developer Portal.**
+
+### 3. Installation
+
+Clone the repository and install dependencies:
 
 ```bash
-# Flash Raspberry Pi OS Lite to SD card
-# Enable SSH and configure WiFi during flash
-
-# Update system
-sudo apt update && sudo apt upgrade -y
-
-# Install required packages
-sudo apt install -y python3-pip python3-venv nodejs npm chromium-browser git
-
-# Clone repository
-git clone <repository-url> /opt/roluatm
-cd /opt/roluatm
-```
-
-### 2. Kiosk Service Setup
-
-```bash
-cd /opt/roluatm/kiosk-pi
-
-# Backend setup
-cd backend
-python3 -m venv venv
-source venv/bin/activate
+git clone <your-repo-url>
+cd RoluATM-new
 pip install -r requirements.txt
-
-# Frontend setup
-cd ../frontend
-npm install
-npm run build
-
-# Install systemd services
-cd ../systemd
-sudo ./install.sh
 ```
 
-### 3. Environment Configuration
+### 4. Running Locally
+
+Use `uvicorn` to run the FastAPI server:
 
 ```bash
-# Copy environment template
-cp /opt/roluatm/kiosk-pi/.env.example /opt/roluatm/kiosk-pi/.env
-
-# Edit configuration
-sudo nano /opt/roluatm/kiosk-pi/.env
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Required environment variables:
-```
-CLOUD_API_URL=https://your-vercel-app.vercel.app
-KIOSK_ID=kiosk-001
-SERIAL_PORT=/dev/ttyACM0
-PROMETHEUS_PORT=9090
-```
+The application will be available at `http://localhost:8000`.
 
-### 4. Start Services
+### 5. Deployment
 
-```bash
-# Enable and start services
-sudo systemctl enable worldcash.service
-sudo systemctl enable kiosk-chromium.service
-sudo systemctl start worldcash.service
-sudo systemctl start kiosk-chromium.service
+This project is optimized for deployment on [Vercel](https://vercel.com). Simply connect your GitHub repository to a new Vercel project.
 
-# Check status
-sudo systemctl status worldcash.service
-sudo systemctl status kiosk-chromium.service
-```
+**Important**: You must add the environment variables from your `.env` file to the "Environment Variables" section of your project settings in Vercel.
 
-## Cloud API Deployment
+## API Endpoints
 
-### Vercel Setup
+-   `/`: Serves the main RoluATM Mini App interface.
+-   `/world-app.json`: World App manifest file.
+-   `/api/verify-world-id`: Backend endpoint to verify World ID proofs.
+-   `/api/initiate-payment`: Starts the payment process.
+-   `/api/confirm-payment`: Confirms the payment on the blockchain.
+-   `/health`: Health check endpoint.
 
-```bash
-cd cloud-api
+## 🤝 Contributing
 
-# Install Vercel CLI
-npm install -g vercel
-
-# Deploy
-vercel --prod
-```
-
-### Environment Variables (Vercel)
-
-Set these in your Vercel dashboard:
-```
-NEON_DATABASE_URL=postgresql://username:password@host/database
-WORLD_ID_APP_ID=your_world_id_app_id
-WORLD_ID_ACTION=your_world_id_action
-```
-
-## First-Run Tests
-
-### 1. Hardware Test
-
-```bash
-# Test Telequip connection
-cd /opt/roluatm/kiosk-pi/backend
-source venv/bin/activate
-python -c "
-from tflex_driver import TFlexDriver
-driver = TFlexDriver('/dev/ttyACM0')
-driver.connect()
-print('Coin mechanism status:', driver.get_status())
-driver.disconnect()
-"
-```
-
-### 2. Service Test
-
-```bash
-# Test backend API
-curl http://localhost:5000/api/balance
-
-# Test frontend
-curl http://localhost:3000
-
-# Test cloud API
-curl https://your-vercel-app.vercel.app/health
-```
-
-### 3. End-to-End Test
-
-1. Power on system
-2. Wait for kiosk to boot to Chromium
-3. Touch screen should show RoluATM interface
-4. Test coin insertion (if hardware connected)
-5. Verify World ID QR code generation
-6. Check Prometheus metrics at http://localhost:9090/metrics
-
-## Development
-
-### Running Locally
-
-```bash
-# Backend (Terminal 1)
-cd kiosk-pi/backend
-source venv/bin/activate
-python app.py
-
-# Frontend (Terminal 2)
-cd kiosk-pi/frontend
-npm run dev
-
-# Cloud API (Terminal 3)
-cd cloud-api
-uvicorn main:app --reload
-```
-
-### Testing
-
-```bash
-# Python tests
-cd kiosk-pi/backend
-pytest tests/
-
-# React tests
-cd kiosk-pi/frontend
-npm test
-
-# Cloud API tests
-cd cloud-api
-pytest tests/
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Telequip not detected**: Check USB connection and permissions
-   ```bash
-   sudo usermod -a -G dialout $USER
-   ls -la /dev/ttyACM*
-   ```
-
-2. **Chromium not starting**: Check X11 permissions
-   ```bash
-   sudo systemctl status kiosk-chromium.service
-   ```
-
-3. **Cloud API unreachable**: Check network and SSL certificates
-   ```bash
-   curl -v https://your-vercel-app.vercel.app/health
-   ```
-
-### Logs
-
-```bash
-# System logs
-sudo journalctl -u worldcash.service -f
-sudo journalctl -u kiosk-chromium.service -f
-
-# Application logs
-tail -f /opt/roluatm/kiosk-pi/backend/logs/app.log
-```
-
-## Security Notes
-
-- All secrets are stored in `.env` files (not committed to git)
-- HTTPS required for production World ID integration
-- Raspberry Pi should be on isolated network segment
-- Regular security updates required
-
-## Support
-
-For hardware issues, consult Telequip T-Flex documentation.
-For software issues, check the logs and GitHub issues.
-
-## Environment Variables
-
-### Required World Integration Variables
-
-```bash
-# World ID Configuration
-WORLD_ID_APP_ID=app_263013ca6f702add37ad338fa43d4307  # Your World App ID
-WORLD_ID_ACTION=withdraw-cash                          # Your World ID action
-WORLD_API_KEY=your_world_developer_api_key            # World Developer Portal API key
-
-# Payment Configuration  
-ROLU_WALLET_ADDRESS=0x742fd484b63E7C9b7f34FAb65A8c165B7cd5C5e8  # Whitelisted wallet address
-
-# Database Configuration
-NEON_DATABASE_URL=postgresql://user:pass@host/db       # Neon Postgres URL
-```
-
-### World Developer Portal Setup
-
-1. **Create Mini App**: Register your app at [developer.worldcoin.org](https://developer.worldcoin.org)
-2. **Whitelist Wallet**: Add your `ROLU_WALLET_ADDRESS` to the allowed recipients  
-3. **Configure Actions**: Create a "withdraw-cash" incognito action
-4. **Get API Key**: Generate API key for payment verification
-5. **App Metadata**: Configure app name, description, logo (512x512px)
-
-## API Endpoints 
+Contributions are welcome! Please open an issue or submit a pull request.

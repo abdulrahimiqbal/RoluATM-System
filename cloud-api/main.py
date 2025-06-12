@@ -17,13 +17,14 @@ import json
 import httpx
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from sqlmodel import Session, create_engine, select
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import uuid
 import time
+import base64
 
 # Import database models with proper error handling
 try:
@@ -528,7 +529,7 @@ async def serve_payment_app(session_id: str):
 @app.get("/")
 async def root():
     """Root endpoint - Mini App Interface"""
-    # Serve the mini-app HTML directly
+    # This HTML content is now much cleaner and more secure.
     html_content = """
 <!DOCTYPE html>
 <html lang="en">
@@ -537,18 +538,10 @@ async def root():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RoluATM - Cash Withdrawal</title>
     
-    <!-- Mini App Metadata - Required by World -->
-    <meta name="world-app" content='{
-        "name": "RoluATM",
-        "description": "World ID verified cash withdrawal from cryptocurrency",
-        "logo": "https://rolu-atm-system.vercel.app/logo-512.png",
-        "category": "financial",
-        "verification_required": true,
-        "payment_required": true
-    }'>
+    <!-- The /world-app.json endpoint is now used for metadata -->
+    <link rel="manifest" href="/world-app.json">
     
     <link rel="icon" type="image/png" href="/favicon.png">
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     
     <style>
         body {{
@@ -559,7 +552,6 @@ async def root():
             min-height: 100vh;
             color: #333;
         }}
-        
         .container {{
             max-width: 400px;
             margin: 0 auto;
@@ -568,164 +560,38 @@ async def root():
             padding: 30px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.1);
         }}
-        
-        .header {{
-            text-align: center;
-            margin-bottom: 30px;
-        }}
-        
-        .logo {{
-            font-size: 32px;
-            font-weight: bold;
-            color: #2c3e50;
-            margin-bottom: 10px;
-        }}
-        
-        .subtitle {{
-            font-size: 16px;
-            color: #7f8c8d;
-        }}
-        
+        .header {{ text-align: center; margin-bottom: 30px; }}
+        .logo {{ font-size: 32px; font-weight: bold; color: #2c3e50; margin-bottom: 10px; }}
+        .subtitle {{ font-size: 16px; color: #7f8c8d; }}
         .amount-display {{
             background: linear-gradient(135deg, #4CAF50, #45a049);
-            color: white;
-            padding: 25px;
-            border-radius: 15px;
-            text-align: center;
-            margin: 20px 0;
+            color: white; padding: 25px; border-radius: 15px; text-align: center; margin: 20px 0;
         }}
-        
-        .amount-value {{
-            font-size: 36px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }}
-        
-        .amount-desc {{
-            opacity: 0.9;
-            font-size: 14px;
-        }}
-        
+        .amount-value {{ font-size: 36px; font-weight: bold; margin-bottom: 5px; }}
+        .amount-desc {{ opacity: 0.9; font-size: 14px; }}
         .action-button {{
-            width: 100%;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            border: none;
-            padding: 15px 20px;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            margin: 15px 0;
-            transition: all 0.3s ease;
+            width: 100%; background: linear-gradient(135deg, #667eea, #764ba2); color: white;
+            border: none; padding: 15px 20px; border-radius: 12px; font-size: 16px;
+            font-weight: 600; cursor: pointer; margin: 15px 0; transition: all 0.3s ease;
         }}
-        
-        .action-button:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
-        }}
-        
-        .action-button:active {{
-            transform: translateY(0);
-            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.2);
-        }}
-        
-        .action-button:disabled {{
-            background: #bdc3c7;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }}
-        
-        .status-message {{
-            text-align: center;
-            padding: 15px;
-            border-radius: 10px;
-            margin: 15px 0;
-            font-weight: 500;
-        }}
-        
-        .status-success {{
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }}
-        
-        .status-error {{
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }}
-        
-        .status-warning {{
-            background: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffeaa7;
-        }}
-        
-        .status-info {{
-            background: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }}
-        
-        .status-content {{
-            line-height: 1.4;
-            word-break: break-word;
-        }}
-        
-        .status-error .status-content {{
-            font-weight: 500;
-        }}
-        
-        .status-success .status-content {{
-            font-weight: 500;
-        }}
-        
-        /* Enhanced status message styling */
-        .status-message {{
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }}
-        
-        .status-message.error {{
-            animation: shake 0.5s ease-in-out;
-        }}
-        
-        @keyframes shake {{
-            0%, 100% {{ transform: translateX(0); }}
-            25% {{ transform: translateX(-5px); }}
-            75% {{ transform: translateX(5px); }}
-        }}
-        
-        /* Better button states */
-        .withdraw-btn:disabled {{
-            opacity: 0.7;
-            cursor: not-allowed;
-        }}
-        
+        .action-button:hover {{ transform: translateY(-2px); box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3); }}
+        .action-button:active {{ transform: translateY(0); box-shadow: 0 4px 10px rgba(102, 126, 234, 0.2); }}
+        .action-button:disabled {{ background: #bdc3c7; cursor: not-allowed; transform: none; box-shadow: none; }}
+        .status-message {{ text-align: center; padding: 15px; border-radius: 10px; margin: 15px 0; font-weight: 500; }}
+        .status-success {{ background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }}
+        .status-error {{ background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }}
+        .status-warning {{ background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }}
+        .status-info {{ background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }}
+        .status-content {{ line-height: 1.4; word-break: break-word; }}
+        .status-error .status-content, .status-success .status-content {{ font-weight: 500; }}
+        .status-message.error {{ animation: shake 0.5s ease-in-out; }}
+        @keyframes shake {{ 0%, 100% {{ transform: translateX(0); }} 25% {{ transform: translateX(-5px); }} 75% {{ transform: translateX(5px); }} }}
         .spinner {{
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            margin-right: 10px;
+            border: 3px solid #f3f3f3; border-top: 3px solid #667eea; border-radius: 50%;
+            width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; margin-right: 10px;
         }}
-        
-        @keyframes spin {{
-            0% {{ transform: rotate(0deg); }}
-            100% {{ transform: rotate(360deg); }}
-        }}
-        
-        .footer {{
-            text-align: center;
-            margin-top: 30px;
-            font-size: 12px;
-            color: #95a5a6;
-        }}
+        @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
+        .footer {{ text-align: center; margin-top: 30px; font-size: 12px; color: #95a5a6; }}
     </style>
     <script src="https://minikit.world.org/v1/minikit.js"></script>
 </head>
@@ -735,210 +601,121 @@ async def root():
             <div class="logo">🏧 RoluATM</div>
             <div class="subtitle">World ID Verified Cash Withdrawal</div>
         </div>
-        
         <div class="amount-display">
             <div class="amount-value">$10.00</div>
             <div class="amount-desc">Cash Withdrawal + $0.50 fee</div>
         </div>
-        
         <div id="status-message" class="status-message"></div>
-        
-        <button id="withdraw-btn" class="action-button" disabled>
-            Initializing...
-        </button>
-        
-        <div class="footer">
-            Powered by World ID • Secure • Private
-        </div>
+        <button id="withdraw-btn" class="action-button" disabled>Initializing...</button>
+        <div class="footer">Powered by World ID • Secure • Private</div>
     </div>
     <script>
-        // Application state
-        let appState = {{
+        const appState = {{
             sessionId: new URLSearchParams(window.location.search).get('session') || 'demo-session-' + Date.now(),
         }};
-        
         let appInitialized = false;
 
-        // DOM elements
         const elements = {{
             withdrawBtn: document.getElementById('withdraw-btn'),
             statusMessage: document.getElementById('status-message'),
         }};
 
-        // UI Helper Functions
         function showStatus(message, type = 'info') {{
-            console.log(`Status [${{type.toUpperCase()}}]:`, message);
-            
-            const statusElement = elements.statusMessage;
-            
-            statusElement.className = 'status-message'; // Reset classes
-            statusElement.classList.add(`status-${{type}}`);
-            
-            statusElement.innerHTML = `<div class="status-content">${{message}}</div>`;
-            statusElement.scrollTop = statusElement.scrollHeight;
-            
-            if (type === 'error') {{
-                statusElement.style.minHeight = 'auto';
-                statusElement.style.maxHeight = '120px';
-                statusElement.style.overflow = 'auto';
-                statusElement.style.wordWrap = 'break-word';
-            }} else {{
-                statusElement.style.minHeight = '';
-                statusElement.style.maxHeight = '';
-                statusElement.style.overflow = '';
-            }}
-        }}
-
-        // Debug information display
-        function showDebugInfo() {{
-            const debugInfo = {{
-                sessionId: appState.sessionId,
-                miniKitAvailable: typeof MiniKit !== 'undefined',
-                miniKitInstalled: typeof MiniKit !== 'undefined' ? MiniKit.isInstalled() : false,
-                userAgent: navigator.userAgent,
-                timestamp: new Date().toISOString(),
-            }};
-            console.log('=== DEBUG INFORMATION ===', JSON.stringify(debugInfo, null, 2));
-            return debugInfo;
-        }}
-        
-        // Enhanced error reporting
-        function reportError(error, context = '') {{
-            const errorReport = {{
-                error: {{
-                    message: error.message,
-                    stack: error.stack,
-                }},
-                context: context,
-                debugInfo: showDebugInfo(),
-            }};
-            console.error('=== ERROR REPORT ===', JSON.stringify(errorReport, null, 2));
-            return errorReport;
-        }}
-        
-        // Global error handlers
-        window.addEventListener('error', (event) => reportError(event.error, 'Global error handler'));
-        window.addEventListener('unhandledrejection', (event) => reportError(new Error(event.reason), 'Unhandled promise rejection'));
-
-        // Main app initialization logic
-        function initializeApp() {{
-            if (appInitialized) return; // Run only once
-            appInitialized = true;
-            
-            console.log('RoluATM Mini App initialized');
-            elements.withdrawBtn.addEventListener('click', handleWithdraw);
-            
-            elements.withdrawBtn.disabled = false;
-            elements.withdrawBtn.innerHTML = 'Withdraw $10.50';
-            showStatus('Ready to withdraw $10.50', 'success');
+            const statusEl = elements.statusMessage;
+            statusEl.className = 'status-message';
+            statusEl.classList.add(`status-${{type}}`);
+            statusEl.innerHTML = `<div class="status-content">${{message}}</div>`;
         }}
 
         async function handleWithdraw() {{
             try {{
-                console.log('=== WITHDRAWAL PROCESS STARTED ===');
-                if (typeof MiniKit === 'undefined' || !MiniKit.isInstalled()) {{
-                    throw new Error('MiniKit not properly installed. Please open this page within World App.');
-                }}
-                
-                showStatus('🔍 Step 1/3: Preparing World ID verification...', 'warning');
-                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Verifying...';
                 elements.withdrawBtn.disabled = true;
-
-                const verifyPayload = {{
-                    action: 'withdraw-cash',
+                
+                // Step 1: Frontend - Get World ID proof
+                showStatus('🔍 Verifying you are a unique human...', 'warning');
+                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Verifying...';
+                
+                const worldIdPayload = await MiniKit.commands.verify({{
+                    action: '{WORLD_ID_ACTION}',
                     signal: appState.sessionId,
                     verification_level: 'orb'
-                }};
-                
-                showStatus('🌍 Requesting World ID verification...', 'warning');
-                const verifyResponse = await MiniKit.commands.verify(verifyPayload);
+                }});
 
-                if (!verifyResponse.success) {{
-                    const errorMsg = verifyResponse.error || 'Verification was not successful';
-                    if (errorMsg.includes('verification_rejected')) {{
-                        throw new Error('❌ You cancelled the World ID verification. Please try again.');
-                    }} else if (errorMsg.includes('max_verifications_reached')) {{
-                        throw new Error('❌ You have already verified for this action.');
-                    }}
-                    throw new Error(`❌ World ID verification failed: ${{errorMsg}}`);
+                if (!worldIdPayload.success) throw new Error('World ID verification was cancelled.');
+
+                // Step 2: Backend - Verify World ID proof
+                showStatus('🔐 Securely verifying proof...', 'warning');
+                const verifyResponse = await fetch('/api/verify-world-id', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{
+                        world_id_payload: worldIdPayload,
+                        session_id: appState.sessionId
+                    }})
+                }});
+
+                if (!verifyResponse.ok) {{
+                    const error = await verifyResponse.json();
+                    throw new Error(error.detail || 'Backend verification failed.');
                 }}
-
-                showStatus('✅ World ID verified! Moving to payment...', 'success');
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
-                showStatus('💳 Step 2/3: Initializing payment...', 'warning');
-                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Initializing Payment...';
                 
+                // Step 3: Backend - Initiate Payment
+                showStatus('💳 Initializing payment...', 'warning');
+                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Preparing...';
                 const initResponse = await fetch('/api/initiate-payment', {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
                     body: JSON.stringify({{ session_id: appState.sessionId, amount: 10.50 }})
                 }});
-                
+
                 if (!initResponse.ok) {{
-                    const errorData = await initResponse.json();
-                    throw new Error(`❌ Payment initialization failed: ${{errorData.detail || `HTTP ${{initResponse.status}}`}}`);
+                    const error = await initResponse.json();
+                    throw new Error(error.detail || 'Could not initiate payment.');
                 }}
-                
-                const {{ reference }} = await initResponse.json();
-                
-                showStatus('💳 Step 2/3: Requesting payment authorization...', 'warning');
-                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Authorizing Payment...';
-                
+                const {{ reference, to_address }} = await initResponse.json();
+
+                // Step 4: Frontend - Authorize Payment
+                showStatus('💰 Please approve the transaction in your wallet...', 'warning');
                 const paymentPayload = {{
                     reference: reference,
-                    to: '{ROLU_WALLET_ADDRESS}',
+                    to: to_address,
                     tokens: [{{ symbol: 'USDC', token_amount: '10500000' }}],
                     description: 'RoluATM Cash Withdrawal'
                 }};
-                
+
                 const paymentResponse = await MiniKit.commands.pay(paymentPayload);
+                if (!paymentResponse.success) throw new Error('Payment was cancelled.');
 
-                if (!paymentResponse.success) {{
-                    const paymentError = paymentResponse.error || 'Payment was not successful';
-                    if (paymentError.includes('payment_rejected')) {{
-                        throw new Error('❌ You cancelled the payment. Please try again.');
-                    }} else if (paymentError.includes('insufficient_balance')) {{
-                        throw new Error('❌ Insufficient USDC balance. Please add funds and try again.');
-                    }}
-                    throw new Error(`❌ Payment failed: ${{paymentError}}`);
-                }}
-                
-                showStatus('🔄 Step 3/3: Verifying payment...', 'warning');
-                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Verifying Payment...';
-
+                // Step 5: Backend - Confirm Payment on-chain
+                showStatus('🔗 Confirming transaction on the blockchain...', 'warning');
+                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Confirming...';
                 const confirmResponse = await fetch('/api/confirm-payment', {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{ payload: paymentResponse, reference: reference }})
+                    body: JSON.stringify({{ transaction_id: paymentResponse.transaction_id, reference: reference }})
                 }});
                 
-                const confirmResult = await confirmResponse.json();
-                
-                if (confirmResult.success) {{
-                    showStatus('✅ Payment confirmed! Dispensing cash...', 'success');
-                    elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Dispensing...';
-                    await signalCashDispense();
-                }} else {{
-                    throw new Error(`❌ Payment verification failed: ${{confirmResult.error || 'Unknown error'}}`);
+                if (!confirmResponse.ok) {{
+                    const error = await confirmResponse.json();
+                    throw new Error(error.detail || 'Could not confirm payment.');
                 }}
+                
+                // Final Step: Dispense Cash
+                showStatus('✅ Payment confirmed! Dispensing cash...', 'success');
+                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Dispensing...';
+                await signalCashDispense();
 
             }} catch (error) {{
-                reportError(error, 'Withdrawal process');
-                showStatus(error.message || 'An unexpected error occurred', 'error');
+                showStatus(`❌ Error: ${{error.message}}`, 'error');
                 elements.withdrawBtn.innerHTML = 'Retry Withdrawal';
                 elements.withdrawBtn.disabled = false;
-                if (typeof MiniKit !== 'undefined') {{
-                    MiniKit.commands.sendHapticFeedback({{ type: 'error' }});
-                }}
+                if (typeof MiniKit !== 'undefined') MiniKit.commands.sendHapticFeedback({{ type: 'error' }});
             }}
         }}
-        
+
         async function signalCashDispense() {{
+            // This function remains the same...
             try {{
-                console.log('=== CASH DISPENSE PROCESS STARTED ===');
-                showStatus('🏧 Contacting ATM hardware...', 'warning');
-                
                 const response = await fetch('https://rolu-atm-system.vercel.app/confirm-withdrawal', {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
@@ -949,83 +726,46 @@ async def root():
                         timestamp: new Date().toISOString()
                     }})
                 }});
-                
                 if (response.ok) {{
-                    showStatus('✅ Cash dispensed successfully! Please collect your quarters.', 'success');
+                    showStatus('✅ Please collect your cash.', 'success');
                     elements.withdrawBtn.innerHTML = '✅ Transaction Complete';
-                    if (typeof MiniKit !== 'undefined') {{
-                        MiniKit.commands.sendHapticFeedback({{ type: 'success' }});
-                    }}
+                    if (typeof MiniKit !== 'undefined') MiniKit.commands.sendHapticFeedback({{ type: 'success' }});
                 }} else {{
                     const errorData = await response.json().catch(() => ({{}}));
-                    throw new Error(`❌ ATM Hardware Error: ${{errorData.detail || `HTTP ${{response.status}}`}}`);
+                    throw new Error(`ATM Hardware Error: ${{errorData.detail || 'Please contact support.'}}`);
                 }}
-                
             }} catch (error) {{
-                reportError(error, 'Cash dispense process');
-                showStatus(error.message, 'error');
+                showStatus(`❌ ${{error.message}}`, 'error');
                 elements.withdrawBtn.innerHTML = 'Contact Support';
-                elements.withdrawBtn.disabled = true;
-                if (typeof MiniKit !== 'undefined') {{
-                    MiniKit.commands.sendHapticFeedback({{ type: 'error' }});
-                }}
             }}
         }}
 
-        // MiniKit loading and initialization logic
-        function initMiniKit() {{
-            if (typeof MiniKit !== 'undefined') {{
-                try {{
-                    MiniKit.install();
-                    MiniKit.init({{ app_id: '{WORLD_ID_APP_ID}' }});
-                    console.log('MiniKit initialized successfully');
-                    initializeApp();
-                    return true;
-                }} catch (e) {{
-                    reportError(e, 'MiniKit Init');
-                    showStatus(`Error: MiniKit failed to initialize. ${{e.message}}`, 'error');
-                    elements.withdrawBtn.disabled = true;
-                    return false;
-                }}
-            }}
-            return false;
+        function initializeApp() {{
+            if (appInitialized) return;
+            appInitialized = true;
+            elements.withdrawBtn.addEventListener('click', handleWithdraw);
+            elements.withdrawBtn.disabled = false;
+            elements.withdrawBtn.innerHTML = 'Withdraw $10.50';
+            showStatus('Ready to withdraw cash', 'success');
         }}
 
-        // Main entry point
         window.addEventListener('load', () => {{
-            elements.withdrawBtn.disabled = true;
-            showStatus('Initializing RoluATM...', 'info');
-            
-            if (!initMiniKit()) {{
-                let attempts = 0;
-                const interval = setInterval(() => {{
-                    attempts++;
-                    if (initMiniKit() || attempts >= 20) {{
-                        clearInterval(interval);
-                        if (!appInitialized && attempts >= 20) {{
-                            showStatus('Error: Could not connect to World App. Please restart.', 'error');
-                            reportError(new Error('MiniKit polling failed'), 'MiniKit Loader');
-                        }}
-                    }}
-                }}, 100);
-            }}
-            
-            if (location.search.includes('debug')) {{
-                const s = document.createElement('script');
-                s.src = 'https://cdn.jsdelivr.net/npm/eruda';
-                document.head.appendChild(s);
-                s.onload = () => eruda.init();
+            showStatus('Initializing...', 'info');
+            try {{
+                MiniKit.install();
+                MiniKit.init({{ app_id: '{WORLD_ID_APP_ID}' }});
+                initializeApp();
+            }} catch (e) {{
+                showStatus('Error: Could not load World App components.', 'error');
             }}
         }});
     </script>
 </body>
 </html>
-"""
-    # Inject environment variables into the HTML content
-    # Using .format() to avoid issues with f-strings and JS braces
+    """
     final_html = html_content.format(
         WORLD_ID_APP_ID=WORLD_ID_APP_ID,
-        ROLU_WALLET_ADDRESS=ROLU_WALLET_ADDRESS
+        WORLD_ID_ACTION=WORLD_ID_ACTION
     )
     return HTMLResponse(content=final_html)
 
@@ -1058,35 +798,34 @@ async def test_endpoint():
 
 @app.get("/world-app.json")
 async def world_app_manifest():
-    """World App manifest for mini app metadata"""
-    return {{
+    """
+    World App manifest.
+    This provides metadata about the mini-app to the World App.
+    """
+    return {
         "name": "RoluATM",
-        "description": "World ID verified cash withdrawal from cryptocurrency",
-        "logo": "https://rolu-atm-system.vercel.app/logo-512.png",
+        "description": "World ID verified cash withdrawal from cryptocurrency.",
+        "logo": f"https://{os.getenv('VERCEL_URL', 'localhost:8000')}/favicon.png",
         "category": "financial",
         "verification_required": True,
         "payment_required": True,
-        "version": "1.0.0",
-        "developer": {{
-            "name": "RoluATM",
-            "url": "https://rolu-atm-system.vercel.app"
-        }},
         "permissions": [
             "world_id_verify",
             "payments",
             "haptic_feedback"
         ]
-    }}
+    }
 
 
-@app.get("/favicon.png")
+@app.get("/favicon.png", response_class=Response)
 async def favicon():
-    """Favicon endpoint"""
-    # Return a simple 1x1 transparent PNG for now
-    # In production, replace with actual favicon
-    from fastapi.responses import Response
-    transparent_png = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x00\x01\x00\x00\x00\x00\x00\x00\x2d\xb4\x06\x17\x00\x00\x00\x00IEND\xaeB`\x82'
-    return Response(content=transparent_png, media_type="image/png")
+    """Serves the favicon for the app."""
+    # This is a placeholder 1x1 transparent PNG.
+    # Replace with your actual favicon file for a better user experience.
+    favicon_content = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+    )
+    return Response(content=favicon_content, media_type="image/png")
 
 
 @app.post("/kiosk-health")
@@ -1443,117 +1182,109 @@ async def payment_success(session_id: str):
 
 @app.post("/api/initiate-payment")
 async def initiate_payment(request: dict):
-    """Initiate a payment transaction with enhanced error handling"""
-    try:
-        logging.info(f"Payment initiation requested for session: {request.get('session_id')}, amount: {request.get('amount', 10.50)}")
-        
-        # Validate session ID
-        if not request.get('session_id') or len(request.get('session_id').strip()) == 0:
-            logging.error("Payment initiation failed: Missing or empty session ID")
-            raise HTTPException(status_code=400, detail="Session ID is required and cannot be empty")
-        
-        # Validate amount
-        if request.get('amount', 10.50) <= 0:
-            logging.error(f"Payment initiation failed: Invalid amount {request.get('amount', 10.50)}")
-            raise HTTPException(status_code=400, detail=f"Amount must be positive, received: ${request.get('amount', 10.50)}")
-        
-        if request.get('amount', 10.50) != 10.50:  # RoluATM fixed amount
-            logging.error(f"Payment initiation failed: Amount {request.get('amount', 10.50)} does not match expected $10.50")
-            raise HTTPException(status_code=400, detail=f"RoluATM only supports $10.50 withdrawals, received: ${request.get('amount', 10.50)}")
-        
-        # Generate unique reference
-        reference = f"rolu_atm_{request.get('session_id')}_{int(time.time())}"
-        
-        # Store payment request (in production, use database)
-        payment_requests[reference] = {
-            "session_id": request.get('session_id'),
-            "amount": request.get('amount', 10.50),
-            "status": "initiated",
-            "timestamp": time.time()
-        }
-        
-        logging.info(f"Payment initiated successfully: reference={reference}")
-        return {"reference": reference}
-        
-    except HTTPException:
-        # Re-raise HTTP exceptions (they have proper error messages)
-        raise
-    except Exception as e:
-        # Log unexpected errors
-        logging.error(f"Unexpected error during payment initiation: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal server error during payment initiation: {str(e)}")
+    """
+    Initiates a payment by generating a unique reference ID.
+    Now also securely provides the receiving wallet address.
+    """
+    session_id = request.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id is required.")
+    
+    reference = f"rolu_atm_{session_id}_{uuid.uuid4().hex[:8]}"
+    logger.info(f"Payment initiated with reference: {reference}")
+    
+    # Securely provide the wallet address from backend environment variables
+    return {
+        "reference": reference,
+        "to_address": ROLU_WALLET_ADDRESS
+    }
 
 
 @app.post("/api/confirm-payment")
 async def confirm_payment(request: dict):
-    """Verify and confirm payment transaction with enhanced error handling"""
-    try:
-        payload = request.get("payload")
-        reference = request.get("reference")
+    """
+    Confirms a payment by verifying the transaction with the Worldcoin API.
+    This is a critical security step.
+    """
+    transaction_id = request.get("transaction_id")
+    reference = request.get("reference")
+    
+    if not transaction_id or not reference:
+        raise HTTPException(status_code=400, detail="transaction_id and reference are required.")
+    
+    # In a real application, you would first look up the reference in your database
+    # to ensure it's a valid, pending transaction.
+    
+    logger.info(f"Confirming payment for tx: {transaction_id}, reference: {reference}")
+    
+    # Verify the transaction with Worldcoin API
+    verification_url = f"https://developer.worldcoin.org/api/v2/minikit/transaction/{transaction_id}"
+    params = {"app_id": WORLD_ID_APP_ID, "type": "payment"}
+    headers = {"Authorization": f"Bearer {os.getenv('WORLD_API_KEY')}"}
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(verification_url, params=params, headers=headers)
         
-        logging.info(f"Payment confirmation requested for reference: {reference}")
+    if response.status_code != 200:
+        error_detail = response.json().get("detail", "Failed to get transaction status from Worldcoin API.")
+        logger.error(f"Payment confirmation failed: {response.status_code} - {error_detail}")
+        raise HTTPException(status_code=response.status_code, detail=f"Payment Confirmation Failed: {error_detail}")
+    
+    transaction_data = response.json()
+    
+    # Final security checks
+    if transaction_data.get("reference") != reference:
+        raise HTTPException(status_code=400, detail="Transaction reference mismatch.")
+    
+    if transaction_data.get("transaction_status") != "confirmed":
+        status = transaction_data.get('transaction_status', 'unknown')
+        raise HTTPException(status_code=400, detail=f"Transaction not confirmed. Status: {status}")
         
-        # Validate required fields
-        if not payload:
-            logging.error("Payment confirmation failed: Missing payload")
-            raise HTTPException(status_code=400, detail="Payment payload is required")
+    logger.info(f"Payment successfully confirmed for reference: {reference}")
+    
+    return {"success": True, "detail": "Payment confirmed successfully."}
+
+
+@app.post("/api/verify-world-id")
+async def verify_world_id_endpoint(request: dict):
+    """
+    Verifies the World ID proof with the Worldcoin API.
+    This is a critical security step that MUST be done on the backend.
+    """
+    # 1. Get required data from the request
+    world_id_payload = request.get("world_id_payload")
+    session_id = request.get("session_id")
+    
+    if not all([world_id_payload, session_id]):
+        raise HTTPException(status_code=400, detail="Missing required fields for verification.")
         
-        if not reference:
-            logging.error("Payment confirmation failed: Missing reference")
-            raise HTTPException(status_code=400, detail="Payment reference is required")
-        
-        # Check if reference exists in our system
-        if reference not in payment_requests:
-            logging.error(f"Payment confirmation failed: Unknown reference {reference}")
-            raise HTTPException(status_code=404, detail=f"Payment reference not found: {reference}")
-        
-        # Get payment request details
-        payment_info = payment_requests[reference]
-        logging.info(f"Found payment request: {payment_info}")
-        
-        # Validate payload structure
-        if not isinstance(payload, dict):
-            logging.error("Payment confirmation failed: Invalid payload format")
-            raise HTTPException(status_code=400, detail="Payment payload must be a valid object")
-        
-        # Check if payment was successful according to MiniKit
-        if not payload.get("success"):
-            error_msg = payload.get("error", "Payment was not successful")
-            logging.error(f"Payment confirmation failed: {error_msg}")
-            raise HTTPException(status_code=400, detail=f"Payment was not successful: {error_msg}")
-        
-        # Extract transaction details
-        transaction_id = payload.get("transaction_id")
-        if not transaction_id:
-            logging.error("Payment confirmation failed: Missing transaction ID")
-            raise HTTPException(status_code=400, detail="Transaction ID is required from payment payload")
-        
-        # TODO: Verify transaction on blockchain
-        # In production, verify the transaction on Optimism/Base blockchain
-        # For now, we'll trust the MiniKit payload
-        
-        # Mark payment as confirmed
-        payment_requests[reference]["status"] = "confirmed"
-        payment_requests[reference]["transaction_id"] = transaction_id
-        payment_requests[reference]["confirmed_at"] = time.time()
-        
-        logging.info(f"Payment confirmed successfully: reference={reference}, tx_id={transaction_id}")
-        
-        return {
-            "success": True,
-            "reference": reference,
-            "transaction_id": transaction_id,
-            "amount": payment_info["amount"],
-            "session_id": payment_info["session_id"]
-        }
-        
-    except HTTPException:
-        # Re-raise HTTP exceptions (they have proper error messages)
-        raise
-    except Exception as e:
-        # Log unexpected errors
-        logging.error(f"Unexpected error during payment confirmation: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal server error during payment confirmation: {str(e)}")
+    # 2. Make the verification call to Worldcoin API
+    verification_url = f"https://developer.worldcoin.org/api/v2/verify/{WORLD_ID_APP_ID}"
+    headers = {"Authorization": f"Bearer {os.getenv('WORLD_API_KEY')}"}
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            verification_url,
+            headers=headers,
+            json={
+                "nullifier_hash": world_id_payload["nullifier_hash"],
+                "merkle_root": world_id_payload["merkle_root"],
+                "proof": world_id_payload["proof"],
+                "verification_level": world_id_payload["verification_level"],
+                "action": WORLD_ID_ACTION,
+                "signal": session_id,
+            }
+        )
+    
+    # 3. Handle the response from Worldcoin API
+    if response.status_code == 200:
+        # Successfully verified
+        return {"success": True, "detail": "World ID verified successfully."}
+    else:
+        # Verification failed
+        error_detail = response.json().get("detail", "Unknown verification error.")
+        logger.error(f"World ID verification failed: {response.status_code} - {error_detail}")
+        raise HTTPException(status_code=response.status_code, detail=f"World ID Verification Failed: {error_detail}")
 
 
 # For local development
