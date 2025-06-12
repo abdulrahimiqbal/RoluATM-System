@@ -179,11 +179,15 @@
         </div>
     </div>
 
+    <!-- MiniKit SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@latest/dist/minikit.js"></script>
+    
     <script>
         // App Configuration
         const APP_CONFIG = {
             appId: 'app_263013ca6f702add37ad338fa43d4307',
-            action: 'withdraw-cash'  // Use same action but different signal
+            action: 'withdraw-cash',
+            signal: 'rolu-signin-' + Date.now()
         };
 
         // Create debug console
@@ -218,54 +222,43 @@
             debugLog(`Button: "${text}", disabled: ${disabled}`);
         }
 
-        // World ID Sign-In
+        // World ID Sign-In using MiniKit
         async function performWorldIDSignIn() {
-            debugLog('🔐 Starting World ID sign-in...');
+            debugLog('🔐 Starting World ID sign-in with MiniKit...');
             
-            if (!window.WorldApp) {
+            if (!window.MiniKit) {
+                throw new Error('MiniKit not available');
+            }
+
+            if (!MiniKit.isInstalled()) {
                 throw new Error('World App not detected');
             }
 
-            const verifyCommand = window.WorldApp.supported_commands?.find(cmd => cmd.name === 'verify');
-            if (!verifyCommand) {
-                throw new Error('Verify command not supported');
+            const verifyPayload = {
+                action: APP_CONFIG.action,
+                signal: APP_CONFIG.signal,
+                verification_level: 'orb'
+            };
+
+            debugLog('Verify payload: ' + JSON.stringify(verifyPayload));
+
+            try {
+                const { finalPayload } = await MiniKit.commandsAsync.verify(verifyPayload);
+                debugLog('MiniKit verify response: ' + JSON.stringify(finalPayload));
+
+                if (finalPayload.status === 'error') {
+                    throw new Error('Verification failed: ' + finalPayload.error_code);
+                }
+
+                if (finalPayload.status === 'success') {
+                    return finalPayload;
+                } else {
+                    throw new Error('Unexpected verification response status: ' + finalPayload.status);
+                }
+            } catch (error) {
+                debugLog('MiniKit verify error: ' + error.message);
+                throw error;
             }
-
-            return new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    reject(new Error('Sign-in timeout'));
-                }, 30000);
-
-                const messageHandler = (event) => {
-                    debugLog('Received sign-in message: ' + JSON.stringify(event.data));
-                    
-                    if (event.data?.eventType === 'verify') {
-                        clearTimeout(timeout);
-                        window.removeEventListener('message', messageHandler);
-                        
-                        if (event.data.eventData?.nullifier_hash) {
-                            resolve(event.data.eventData);
-                        } else {
-                            reject(new Error('Invalid sign-in response'));
-                        }
-                    }
-                };
-
-                window.addEventListener('message', messageHandler);
-
-                // Send sign-in request with different action
-                const signInMessage = {
-                    eventType: 'verify',
-                    eventData: {
-                        action: APP_CONFIG.action,  // 'signin' instead of 'withdraw-cash'
-                        signal: 'rolu-signin-' + Date.now(),
-                        verification_level: 'orb'
-                    }
-                };
-
-                debugLog('Sending sign-in message: ' + JSON.stringify(signInMessage));
-                window.parent.postMessage(signInMessage, '*');
-            });
         }
 
         // Handle sign-in
@@ -279,12 +272,33 @@
                 const worldIdData = await performWorldIDSignIn();
                 debugLog('✅ World ID sign-in successful: ' + JSON.stringify(worldIdData));
 
+                // Verify the proof with backend
+                const verifyResponse = await fetch('/api/verify-signin', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        payload: worldIdData,
+                        action: APP_CONFIG.action,
+                        signal: APP_CONFIG.signal
+                    })
+                });
+
+                const verifyResult = await verifyResponse.json();
+                debugLog('Backend verification result: ' + JSON.stringify(verifyResult));
+
+                if (!verifyResponse.ok || !verifyResult.success) {
+                    throw new Error('Backend verification failed: ' + (verifyResult.error || 'Unknown error'));
+                }
+
                 showStatus('Sign-in successful! Redirecting to ATM...', 'success');
                 setButtonState('✅ Success! Redirecting...', true);
 
                 // Store session data
                 sessionStorage.setItem('worldIdSession', JSON.stringify({
                     worldId: worldIdData,
+                    verified: true,
                     signedInAt: new Date().toISOString(),
                     expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes
                 }));
@@ -301,8 +315,8 @@
             }
         }
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
+        // Initialize MiniKit and app
+        async function initializeApp() {
             debugLog('🚀 RoluATM Sign-In initialized');
             debugLog('User Agent: ' + navigator.userAgent);
             debugLog('URL: ' + window.location.href);
@@ -314,7 +328,7 @@
                     const session = JSON.parse(existingSession);
                     const expiresAt = new Date(session.expiresAt);
                     
-                    if (expiresAt > new Date()) {
+                    if (expiresAt > new Date() && session.verified) {
                         debugLog('✅ Existing valid session found');
                         showStatus('Already signed in! Redirecting to ATM...', 'success');
                         setButtonState('✅ Redirecting...', true);
@@ -323,7 +337,7 @@
                         }, 1000);
                         return;
                     } else {
-                        debugLog('⚠️ Session expired, clearing');
+                        debugLog('⚠️ Session expired or invalid, clearing');
                         sessionStorage.removeItem('worldIdSession');
                     }
                 } catch (e) {
@@ -332,14 +346,27 @@
                 }
             }
             
-            if (window.WorldApp) {
-                debugLog('✅ World App detected');
-                showStatus('Ready to sign in with World ID', 'success');
-                setButtonState('🌍 Sign in with World ID', false);
+            // Check MiniKit availability
+            if (typeof window.MiniKit !== 'undefined') {
+                debugLog('✅ MiniKit available');
+                
+                if (MiniKit.isInstalled()) {
+                    debugLog('✅ World App detected');
+                    showStatus('Ready to sign in with World ID', 'success');
+                    setButtonState('🌍 Sign in with World ID', false);
+                } else {
+                    debugLog('❌ World App not installed');
+                    showStatus('Please open this page in the World App.', 'error');
+                    setButtonState('Open in World App', true);
+                }
             } else {
-                debugLog('❌ World App not detected');
-                showStatus('Please open this page in the World App.', 'error');
-                setButtonState('Open in World App', true);
+                debugLog('❌ MiniKit not available');
+                showStatus('Loading World ID SDK...', 'warning');
+                setButtonState('Loading...', true);
+                
+                // Retry after a short delay
+                setTimeout(initializeApp, 1000);
+                return;
             }
 
             // Add click handler
@@ -348,6 +375,12 @@
                 debugLog('🔥 Sign-in button clicked!');
                 handleSignIn();
             });
+        }
+
+        // Wait for DOM and MiniKit to be ready
+        document.addEventListener('DOMContentLoaded', () => {
+            // Give MiniKit time to load
+            setTimeout(initializeApp, 500);
         });
     </script>
 </body>

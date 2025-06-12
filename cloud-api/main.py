@@ -362,6 +362,40 @@ async def confirm_payment(request: dict):
         payment_requests[payment_id].update({"status": "failed", "error_message": error_message})
         return {"success": False, "status": "failed", "message": error_message}
 
+@app.post("/api/verify-signin")
+async def verify_signin(request: dict):
+    """
+    Verify World ID proof for sign-in authentication.
+    Uses the same verification as withdrawal but for authentication purposes.
+    """
+    try:
+        payload = request.get("payload")
+        action = request.get("action")
+        signal = request.get("signal")
+        
+        if not payload or not action:
+            raise HTTPException(status_code=400, detail="Payload and action are required")
+        
+        # Verify the World ID proof
+        is_verified = await verify_world_id_proof(payload)
+        if not is_verified:
+            raise HTTPException(status_code=400, detail="World ID verification failed")
+        
+        logger.info(f"✅ Sign-in verification successful for nullifier: {payload.get('nullifier_hash', 'unknown')}")
+        
+        return {
+            "success": True,
+            "message": "Sign-in verification successful",
+            "nullifier_hash": payload.get("nullifier_hash"),
+            "verification_level": payload.get("verification_level")
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Sign-in verification error: {e}")
+        raise HTTPException(status_code=500, detail="Sign-in verification failed")
+
 @app.post("/api/withdraw")
 async def withdraw_cash(request: dict):
     """

@@ -274,6 +274,9 @@
         </div>
     </div>
 
+    <!-- MiniKit SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@latest/dist/minikit.js"></script>
+    
     <script>
         // App Configuration
         const APP_CONFIG = {
@@ -417,15 +420,33 @@
             }
         }
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
+        // Initialize MiniKit and app
+        async function initializeATM() {
             debugLog('🚀 RoluATM initialized');
             debugLog('User Agent: ' + navigator.userAgent);
             debugLog('URL: ' + window.location.href);
             
+            // Check MiniKit availability
+            if (typeof window.MiniKit !== 'undefined') {
+                debugLog('✅ MiniKit available');
+                
+                if (!MiniKit.isInstalled()) {
+                    debugLog('❌ World App not installed');
+                    showStatus('Please open this page in the World App.', 'error');
+                    setTimeout(() => {
+                        window.location.href = '/signin';
+                    }, 2000);
+                    return;
+                }
+            } else {
+                debugLog('❌ MiniKit not available, retrying...');
+                setTimeout(initializeATM, 1000);
+                return;
+            }
+            
             // Check session
             const session = getSession();
-            if (!session) {
+            if (!session || !session.verified) {
                 debugLog('❌ No valid session found, redirecting to sign-in');
                 showStatus('Please sign in first', 'error');
                 setTimeout(() => {
@@ -478,6 +499,12 @@
             
             showStatus('Ready to withdraw cash', 'success');
             setButtonState('💰 Withdraw Cash', false);
+        }
+
+        // Wait for DOM and MiniKit to be ready
+        document.addEventListener('DOMContentLoaded', () => {
+            // Give MiniKit time to load
+            setTimeout(initializeATM, 500);
         });
     </script>
 </body>
