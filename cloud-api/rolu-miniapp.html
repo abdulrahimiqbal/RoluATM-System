@@ -256,6 +256,42 @@
             console.log('window.MiniKit exists:', !!window.MiniKit);
             console.log('typeof window.MiniKit:', typeof window.MiniKit);
             
+            // Try to find MiniKit in ALL possible locations
+            const allPossibleMiniKitLocations = [
+                'window.MiniKit',
+                'window.WorldApp.MiniKit', 
+                'window.parent.MiniKit',
+                'window.top.MiniKit',
+                'window.frames[0].MiniKit',
+                'globalThis.MiniKit',
+                'self.MiniKit'
+            ];
+            
+            console.log('=== SEARCHING FOR MINIKIT IN ALL LOCATIONS ===');
+            allPossibleMiniKitLocations.forEach(location => {
+                try {
+                    const value = eval(location);
+                    console.log(`${location}:`, !!value, typeof value);
+                    if (value) {
+                        console.log(`Found MiniKit at ${location}:`, Object.keys(value));
+                    }
+                } catch (e) {
+                    console.log(`${location}: Error -`, e.message);
+                }
+            });
+            
+            // Check if we're actually in World App environment
+            const isInWorldApp = !!(window.WorldApp || 
+                                   window.location.href.includes('worldapp://') ||
+                                   window.navigator.userAgent.includes('WorldApp') ||
+                                   window.location.href.includes('world.org'));
+            
+            console.log('=== ENVIRONMENT CHECK ===');
+            console.log('Is in World App:', isInWorldApp);
+            console.log('User Agent contains WorldApp:', window.navigator.userAgent.includes('WorldApp'));
+            console.log('URL contains worldapp://', window.location.href.includes('worldapp://'));
+            console.log('URL contains world.org:', window.location.href.includes('world.org'));
+            
             if (window.WorldApp) {
                 console.log('✅ WorldApp found! Checking for MiniKit...');
                 console.log('Supported commands:', window.WorldApp.supported_commands);
@@ -400,7 +436,21 @@
                     key.toLowerCase().includes('coin')
                 );
                 console.log('Relevant window keys:', relevantKeys);
+                
+                // Show helpful error message
+                showStatus('❌ Not running in World App environment', 'error');
+                setButtonState('World App Required', true);
             }
+            
+            // Add helpful developer portal setup check
+            console.log('=== DEVELOPER PORTAL SETUP CHECK ===');
+            console.log('App ID:', APP_CONFIG.appId);
+            console.log('Action:', APP_CONFIG.action);
+            console.log('⚠️ IMPORTANT: Make sure you have created an Incognito Action in Developer Portal:');
+            console.log('1. Go to Developer Portal > Configuration > Incognito Actions');
+            console.log('2. Create action with ID: "withdraw-cash"');
+            console.log('3. Set max verifications (e.g., 1 per day)');
+            console.log('4. For payments, whitelist wallet address:', APP_CONFIG.walletAddress);
             
             // Continue with the rest of the app initialization
             initializeApp();
