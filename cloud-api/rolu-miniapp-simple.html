@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RoluATM - Cash Withdrawal</title>
-    <!-- FORCE DEPLOY: 2025-01-12-16:40 -->
     
     <style>
         body {
@@ -76,16 +75,9 @@
             transition: all 0.3s ease;
         }
         
-        .action-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
-        }
-        
         .action-button:disabled {
             background: #bdc3c7;
             cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
         }
         
         .status-message {
@@ -114,29 +106,6 @@
             border: 1px solid #ffeaa7;
         }
         
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            margin-right: 10px;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .footer {
-            text-align: center;
-            margin-top: 30px;
-            font-size: 12px;
-            color: #95a5a6;
-        }
-
         .debug-console {
             position: fixed;
             top: 0;
@@ -164,6 +133,13 @@
             max-height: 200px;
             overflow-y: auto;
         }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 12px;
+            color: #95a5a6;
+        }
     </style>
 </head>
 <body>
@@ -184,7 +160,7 @@
             Withdraw $10.50
         </button>
 
-        <div id="debug-info" class="debug-info" style="display: block;"></div>
+        <div id="debug-info" class="debug-info"></div>
         
         <div class="footer">
             Powered by World ID • Secure • Private
@@ -195,87 +171,26 @@
         // App Configuration
         const APP_CONFIG = {
             appId: 'app_263013ca6f702add37ad338fa43d4307',
-            action: 'withdraw-cash',
-            signal: 'demo-session-' + Date.now()
+            action: 'withdraw-cash'
         };
 
-        // Create debug console immediately
+        // Create debug console
         const debugConsole = document.createElement('div');
         debugConsole.className = 'debug-console';
         document.body.appendChild(debugConsole);
         
-        // Enhanced logging function
+        // Debug logging
         function debugLog(message, type = 'log') {
             const timestamp = new Date().toLocaleTimeString();
             const logEntry = document.createElement('div');
             logEntry.style.color = type === 'error' ? '#f00' : type === 'warn' ? '#ff0' : '#0f0';
-            logEntry.textContent = `[${timestamp}] ${type.toUpperCase()}: ${message}`;
+            logEntry.textContent = `[${timestamp}] ${message}`;
             debugConsole.appendChild(logEntry);
             debugConsole.scrollTop = debugConsole.scrollHeight;
-            
-            // Also log to regular console
             console[type](message);
         }
 
-        // Override console methods
-        const originalLog = console.log;
-        const originalError = console.error;
-        const originalWarn = console.warn;
-        
-        console.log = (...args) => {
-            originalLog.apply(console, args);
-            debugLog(args.join(' '), 'log');
-        };
-        
-        console.error = (...args) => {
-            originalError.apply(console, args);
-            debugLog(args.join(' '), 'error');
-        };
-        
-        console.warn = (...args) => {
-            originalWarn.apply(console, args);
-            debugLog(args.join(' '), 'warn');
-        };
-
-        // Start debugging
-        debugLog('🚀 RoluATM Debug Console Started');
-        debugLog('Timestamp: ' + new Date().toISOString());
-        debugLog('User Agent: ' + navigator.userAgent);
-        debugLog('URL: ' + window.location.href);
-
-        // Check World App environment
-        debugLog('=== WORLD APP ENVIRONMENT CHECK ===');
-        debugLog('window.WorldApp: ' + !!window.WorldApp);
-        debugLog('window.MiniKit: ' + !!window.MiniKit);
-        debugLog('typeof MiniKit: ' + typeof window.MiniKit);
-        
-        if (window.WorldApp) {
-            debugLog('WorldApp object found!');
-            debugLog('WorldApp keys: ' + Object.keys(window.WorldApp).join(', '));
-            
-            if (window.WorldApp.supported_commands) {
-                debugLog('Supported commands: ' + window.WorldApp.supported_commands.map(cmd => cmd.name).join(', '));
-            }
-        }
-
-        // Function to update debug info display
-        function updateDebugInfo() {
-            const debugInfo = document.getElementById('debug-info');
-            if (debugInfo) {
-                debugInfo.innerHTML = `
-                    <strong>Debug Info:</strong><br>
-                    URL: ${window.location.href}<br>
-                    User Agent: ${navigator.userAgent}<br>
-                    window.WorldApp: ${!!window.WorldApp}<br>
-                    window.MiniKit: ${!!window.MiniKit}<br>
-                    typeof MiniKit: ${typeof window.MiniKit}<br>
-                    MiniKit keys: ${window.MiniKit ? Object.keys(window.MiniKit).join(', ') : 'N/A'}<br>
-                    Is World App: ${!!window.WorldApp ? '[object Object]' : 'false'}
-                `;
-            }
-        }
-
-        // Function to show status messages
+        // Status and button functions
         function showStatus(message, type = 'info') {
             const statusEl = document.getElementById('status-message');
             statusEl.textContent = message;
@@ -284,105 +199,85 @@
             debugLog(`Status: ${type.toUpperCase()} - ${message}`);
         }
 
-        // Function to update button state
         function setButtonState(text, disabled = false) {
             const btn = document.getElementById('withdraw-btn');
             btn.textContent = text;
             btn.disabled = disabled;
-            debugLog(`Button state: "${text}", disabled: ${disabled}`);
+            debugLog(`Button: "${text}", disabled: ${disabled}`);
         }
 
-        // World ID verification using native World App APIs
+        function updateDebugInfo() {
+            const debugInfo = document.getElementById('debug-info');
+            debugInfo.innerHTML = `
+                <strong>Debug Info:</strong><br>
+                URL: ${window.location.href}<br>
+                User Agent: ${navigator.userAgent}<br>
+                window.WorldApp: ${!!window.WorldApp}<br>
+                window.MiniKit: ${!!window.MiniKit}<br>
+                typeof MiniKit: ${typeof window.MiniKit}<br>
+                WorldApp Commands: ${window.WorldApp?.supported_commands?.map(c => c.name).join(', ') || 'N/A'}
+            `;
+        }
+
+        // World ID verification using postMessage
         async function performWorldIDVerification() {
             debugLog('🔐 Starting World ID verification...');
             
-            try {
-                if (!window.WorldApp) {
-                    throw new Error('World App not detected');
-                }
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error('Verification timeout'));
+                }, 30000);
 
-                // Check if verify command is supported
-                const verifyCommand = window.WorldApp.supported_commands?.find(cmd => cmd.name === 'verify');
-                if (!verifyCommand) {
-                    throw new Error('Verify command not supported');
-                }
+                const messageHandler = (event) => {
+                    debugLog('Received message: ' + JSON.stringify(event.data));
+                    
+                    if (event.data?.eventType === 'verify') {
+                        clearTimeout(timeout);
+                        window.removeEventListener('message', messageHandler);
+                        
+                        if (event.data.eventData?.nullifier_hash) {
+                            resolve(event.data.eventData);
+                        } else {
+                            reject(new Error('Invalid verification response'));
+                        }
+                    }
+                };
 
-                debugLog('Sending verify message: ' + JSON.stringify({
+                window.addEventListener('message', messageHandler);
+
+                // Send verification request
+                const verifyMessage = {
                     eventType: 'verify',
                     eventData: {
                         action: APP_CONFIG.action,
-                        signal: APP_CONFIG.signal,
+                        signal: 'demo-session-' + Date.now(),
                         verification_level: 'orb'
                     }
-                }));
+                };
 
-                // Send verification request to World App
-                const verificationPromise = new Promise((resolve, reject) => {
-                    const timeout = setTimeout(() => {
-                        reject(new Error('Verification timeout'));
-                    }, 30000); // 30 second timeout
-
-                    // Listen for response
-                    const messageHandler = (event) => {
-                        debugLog('Received message: ' + JSON.stringify(event.data));
-                        
-                        if (event.data && event.data.eventType === 'verify') {
-                            clearTimeout(timeout);
-                            window.removeEventListener('message', messageHandler);
-                            
-                            if (event.data.eventData && event.data.eventData.nullifier_hash) {
-                                resolve(event.data.eventData);
-                            } else {
-                                reject(new Error('Invalid verification response'));
-                            }
-                        }
-                    };
-
-                    window.addEventListener('message', messageHandler);
-
-                    // Send verification request
-                    window.parent.postMessage({
-                        eventType: 'verify',
-                        eventData: {
-                            action: APP_CONFIG.action,
-                            signal: APP_CONFIG.signal,
-                            verification_level: 'orb'
-                        }
-                    }, '*');
-                });
-
-                const verificationResult = await verificationPromise;
-                debugLog('✅ World ID verification successful!');
-                debugLog('Verification result: ' + JSON.stringify(verificationResult));
-                
-                return verificationResult;
-
-            } catch (error) {
-                debugLog('❌ World ID verification failed: ' + error.message);
-                throw error;
-            }
+                debugLog('Sending verify message: ' + JSON.stringify(verifyMessage));
+                window.parent.postMessage(verifyMessage, '*');
+            });
         }
 
-        // Handle withdrawal process
+        // Handle withdrawal
         async function handleWithdrawal() {
-            debugLog('💰 Starting withdrawal process...');
+            debugLog('💰 Starting withdrawal...');
             
             try {
                 setButtonState('Verifying...', true);
                 showStatus('Verifying your World ID...', 'warning');
 
-                // Perform World ID verification
                 const verificationResult = await performWorldIDVerification();
+                debugLog('✅ Verification successful: ' + JSON.stringify(verificationResult));
                 
                 showStatus('Verification successful! Processing payment...', 'success');
                 setButtonState('Processing...', true);
 
-                // Send verification to backend
+                // Send to backend
                 const response = await fetch('/api/initiate-payment', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         payload: verificationResult,
                         amount: 10.50
@@ -396,31 +291,31 @@
                 const paymentData = await response.json();
                 debugLog('Payment initiated: ' + JSON.stringify(paymentData));
 
-                showStatus('Payment successful! Cash will be dispensed shortly.', 'success');
+                showStatus('Payment successful! Cash dispensing...', 'success');
                 setButtonState('Cash Dispensing...', true);
 
-                // Simulate cash dispensing
                 setTimeout(() => {
-                    showStatus('Cash dispensed successfully! Please collect your money.', 'success');
+                    showStatus('Cash dispensed! Please collect your money.', 'success');
                     setButtonState('Transaction Complete', true);
                 }, 3000);
 
             } catch (error) {
-                debugLog('❌ Withdrawal failed: ' + error.message);
+                debugLog('❌ Error: ' + error.message);
                 showStatus('Error: ' + error.message, 'error');
                 setButtonState('Try Again', false);
             }
         }
 
-        // Initialize when DOM is ready
+        // Initialize
         document.addEventListener('DOMContentLoaded', () => {
-            debugLog('📱 DOM loaded, initializing app...');
+            debugLog('🚀 RoluATM initialized');
+            debugLog('User Agent: ' + navigator.userAgent);
+            debugLog('URL: ' + window.location.href);
             
             updateDebugInfo();
             
-            // Check if we're in World App
             if (window.WorldApp) {
-                debugLog('✅ World App detected!');
+                debugLog('✅ World App detected');
                 showStatus('Ready to withdraw. Click to verify with World ID.', 'success');
                 setButtonState('Withdraw $10.50', false);
             } else {
@@ -430,14 +325,11 @@
             }
 
             // Add click handler
-            const withdrawBtn = document.getElementById('withdraw-btn');
-            if (withdrawBtn) {
-                withdrawBtn.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    debugLog('🔥 Withdraw button clicked!');
-                    handleWithdrawal();
-                });
-            }
+            document.getElementById('withdraw-btn').addEventListener('click', (event) => {
+                event.preventDefault();
+                debugLog('🔥 Button clicked!');
+                handleWithdrawal();
+            });
         });
     </script>
 </body>

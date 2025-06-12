@@ -152,12 +152,17 @@ def get_session():
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    # Serve the rolu-miniapp.html file from the same directory
+    # Serve the simplified rolu-miniapp.html file from the same directory
     try:
-        with open("rolu-miniapp.html", "r") as f:
+        with open("rolu-miniapp-simple.html", "r") as f:
             return HTMLResponse(content=f.read())
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="rolu-miniapp.html not found")
+        # Fallback to original if simple version not found
+        try:
+            with open("rolu-miniapp.html", "r") as f:
+                return HTMLResponse(content=f.read())
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="HTML files not found")
 
 @app.get("/world-app.json")
 async def world_app_manifest():
