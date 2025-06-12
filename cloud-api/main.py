@@ -695,17 +695,15 @@ async def root():
                 const installResult = MiniKit.install('app_263013ca6f702add37ad338fa43d4307');
                 console.log('MiniKit install result:', installResult);
                 
-                if (!installResult.success) {{
+                // Handle both success and "already_installed" as success cases
+                if (installResult.success || installResult.errorCode === 'already_installed') {{
+                    console.log('MiniKit is ready (installed or already installed)');
+                    console.log('MiniKit.isInstalled() after install:', MiniKit.isInstalled());
+                    initializeApp();
+                }} else {{
                     console.error('MiniKit installation failed:', installResult);
                     showStatus(`❌ Error: ${{installResult.errorMessage}}`, 'error');
-                    return;
                 }}
-                
-                console.log('MiniKit installed successfully, checking isInstalled again...');
-                console.log('MiniKit.isInstalled() after install:', MiniKit.isInstalled());
-                
-                console.log('Attempting to initialize app...');
-                initializeApp();
             }} catch (error) {{
                 console.error('Error during MiniKit initialization:', error);
                 showStatus('❌ Error: Failed to initialize. Please try refreshing the page.', 'error');
