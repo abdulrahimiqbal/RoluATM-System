@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoluATM - Cash Withdrawal</title>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .logo {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        .title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .subtitle {
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+        
+        .user-info {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .user-info h3 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+        }
+        
+        .user-info .status {
+            color: #27ae60;
+            font-weight: 600;
+        }
+        
+        .balance-section {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .balance-label {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+        
+        .balance-amount {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .balance-usd {
+            font-size: 16px;
+            opacity: 0.8;
+        }
+        
+        .withdrawal-section {
+            margin-bottom: 30px;
+        }
+        
+        .amount-input {
+            width: 100%;
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 15px;
+            font-size: 24px;
+            text-align: center;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+        
+        .amount-input:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        
+        .quick-amounts {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .quick-amount {
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            background: white;
+            cursor: pointer;
+            text-align: center;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .quick-amount:hover {
+            border-color: #3498db;
+            background: #f8f9fa;
+        }
+        
+        .quick-amount.selected {
+            border-color: #3498db;
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .withdraw-button {
+            width: 100%;
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            border: none;
+            padding: 20px;
+            border-radius: 15px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .withdraw-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(231, 76, 60, 0.3);
+        }
+        
+        .withdraw-button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .status-message {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-weight: 500;
+            text-align: center;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .debug-console {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+            z-index: 9999;
+            border-bottom: 2px solid #0f0;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+        }
+        
+        .sign-out-btn {
+            background: none;
+            border: 1px solid #bdc3c7;
+            color: #7f8c8d;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .sign-out-btn:hover {
+            background: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🏧</div>
+            <div class="title">RoluATM</div>
+            <div class="subtitle">Secure Cash Withdrawal</div>
+        </div>
+        
+        <div class="user-info">
+            <h3>✅ Verified with World ID</h3>
+            <div class="status">Ready for withdrawal</div>
+        </div>
+        
+        <div class="balance-section">
+            <div class="balance-label">Available Balance</div>
+            <div class="balance-amount" id="balance-amount">$0.00</div>
+            <div class="balance-usd">USD Equivalent</div>
+        </div>
+        
+        <div class="withdrawal-section">
+            <input type="number" 
+                   id="amount-input" 
+                   class="amount-input" 
+                   placeholder="Enter amount" 
+                   min="1" 
+                   max="500" 
+                   step="0.01">
+            
+            <div class="quick-amounts">
+                <div class="quick-amount" data-amount="10">$10</div>
+                <div class="quick-amount" data-amount="20">$20</div>
+                <div class="quick-amount" data-amount="50">$50</div>
+                <div class="quick-amount" data-amount="100">$100</div>
+            </div>
+            
+            <button id="withdraw-btn" class="withdraw-button">
+                💰 Withdraw Cash
+            </button>
+        </div>
+        
+        <div id="status-message" class="status-message" style="display: none;"></div>
+        
+        <div class="footer">
+            <button id="sign-out-btn" class="sign-out-btn">Sign Out</button>
+        </div>
+    </div>
+
+    <script>
+        // App Configuration
+        const APP_CONFIG = {
+            appId: 'app_263013ca6f702add37ad338fa43d4307',
+            action: 'withdraw-cash',
+            apiUrl: '/api/withdraw'
+        };
+
+        // Create debug console
+        const debugConsole = document.createElement('div');
+        debugConsole.className = 'debug-console';
+        document.body.appendChild(debugConsole);
+        
+        // Debug logging
+        function debugLog(message, type = 'log') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.style.color = type === 'error' ? '#f00' : type === 'warn' ? '#ff0' : '#0f0';
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            debugConsole.appendChild(logEntry);
+            debugConsole.scrollTop = debugConsole.scrollHeight;
+            console[type](message);
+        }
+
+        // Status functions
+        function showStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status-message');
+            statusEl.textContent = message;
+            statusEl.className = `status-message status-${type}`;
+            statusEl.style.display = 'block';
+            debugLog(`Status: ${type.toUpperCase()} - ${message}`);
+        }
+
+        function setButtonState(text, disabled = false) {
+            const btn = document.getElementById('withdraw-btn');
+            btn.textContent = text;
+            btn.disabled = disabled;
+            debugLog(`Button: "${text}", disabled: ${disabled}`);
+        }
+
+        // Session management
+        function getSession() {
+            const sessionData = sessionStorage.getItem('worldIdSession');
+            if (!sessionData) return null;
+            
+            try {
+                const session = JSON.parse(sessionData);
+                const expiresAt = new Date(session.expiresAt);
+                
+                if (expiresAt <= new Date()) {
+                    sessionStorage.removeItem('worldIdSession');
+                    return null;
+                }
+                
+                return session;
+            } catch (e) {
+                sessionStorage.removeItem('worldIdSession');
+                return null;
+            }
+        }
+
+        function signOut() {
+            sessionStorage.removeItem('worldIdSession');
+            window.location.href = '/signin';
+        }
+
+        // Mock wallet balance (in a real app, this would come from the blockchain)
+        function updateBalance() {
+            const balanceEl = document.getElementById('balance-amount');
+            // Simulate getting balance from wallet
+            const mockBalance = 127.50;
+            balanceEl.textContent = `$${mockBalance.toFixed(2)}`;
+            debugLog(`💰 Balance updated: $${mockBalance.toFixed(2)}`);
+        }
+
+        // Handle withdrawal
+        async function handleWithdrawal() {
+            debugLog('🚀 Starting withdrawal process...');
+            
+            const session = getSession();
+            if (!session) {
+                debugLog('❌ No valid session found');
+                showStatus('Session expired. Please sign in again.', 'error');
+                setTimeout(() => signOut(), 2000);
+                return;
+            }
+
+            const amount = parseFloat(document.getElementById('amount-input').value);
+            if (!amount || amount <= 0) {
+                showStatus('Please enter a valid amount', 'error');
+                return;
+            }
+
+            if (amount > 500) {
+                showStatus('Maximum withdrawal amount is $500', 'error');
+                return;
+            }
+
+            try {
+                setButtonState('💳 Processing...', true);
+                showStatus('Processing withdrawal...', 'warning');
+
+                // Send withdrawal request to backend
+                const response = await fetch(APP_CONFIG.apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        amount: amount,
+                        worldId: session.worldId,
+                        sessionId: 'atm-session-' + Date.now()
+                    })
+                });
+
+                const result = await response.json();
+                debugLog('💰 Withdrawal response: ' + JSON.stringify(result));
+
+                if (response.ok && result.success) {
+                    showStatus(`✅ Success! $${amount.toFixed(2)} dispensed. Transaction ID: ${result.transactionId}`, 'success');
+                    setButtonState('✅ Cash Dispensed!', true);
+                    
+                    // Clear amount and update balance
+                    document.getElementById('amount-input').value = '';
+                    updateBalance();
+                    
+                    // Reset button after delay
+                    setTimeout(() => {
+                        setButtonState('💰 Withdraw Cash', false);
+                        showStatus('Ready for next withdrawal', 'success');
+                    }, 5000);
+                    
+                } else {
+                    throw new Error(result.error || 'Withdrawal failed');
+                }
+
+            } catch (error) {
+                debugLog('❌ Withdrawal error: ' + error.message);
+                showStatus('Withdrawal failed: ' + error.message, 'error');
+                setButtonState('💰 Withdraw Cash', false);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            debugLog('🚀 RoluATM initialized');
+            debugLog('User Agent: ' + navigator.userAgent);
+            debugLog('URL: ' + window.location.href);
+            
+            // Check session
+            const session = getSession();
+            if (!session) {
+                debugLog('❌ No valid session found, redirecting to sign-in');
+                showStatus('Please sign in first', 'error');
+                setTimeout(() => {
+                    window.location.href = '/signin';
+                }, 2000);
+                return;
+            }
+            
+            debugLog('✅ Valid session found');
+            debugLog('Session expires: ' + session.expiresAt);
+            
+            // Update balance
+            updateBalance();
+            
+            // Set up quick amount buttons
+            document.querySelectorAll('.quick-amount').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const amount = btn.dataset.amount;
+                    document.getElementById('amount-input').value = amount;
+                    
+                    // Update selection
+                    document.querySelectorAll('.quick-amount').forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    
+                    debugLog(`Quick amount selected: $${amount}`);
+                });
+            });
+            
+            // Set up withdrawal button
+            document.getElementById('withdraw-btn').addEventListener('click', (event) => {
+                event.preventDefault();
+                debugLog('🔥 Withdraw button clicked!');
+                handleWithdrawal();
+            });
+            
+            // Set up sign out button
+            document.getElementById('sign-out-btn').addEventListener('click', () => {
+                debugLog('🚪 Sign out clicked');
+                signOut();
+            });
+            
+            // Set up amount input validation
+            document.getElementById('amount-input').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                if (value > 500) {
+                    e.target.value = 500;
+                    showStatus('Maximum withdrawal amount is $500', 'warning');
+                }
+            });
+            
+            showStatus('Ready to withdraw cash', 'success');
+            setButtonState('💰 Withdraw Cash', false);
+        });
+    </script>
+</body>
+</html> 

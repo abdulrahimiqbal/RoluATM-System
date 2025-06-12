@@ -152,7 +152,45 @@ def get_session():
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    # Serve the auth-first approach HTML file for testing
+    # Redirect to sign-in page for new two-page flow
+    return HTMLResponse(content="""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>RoluATM - Redirecting</title>
+    </head>
+    <body>
+        <script>
+            window.location.href = '/signin';
+        </script>
+        <p>Redirecting to sign-in...</p>
+    </body>
+    </html>
+    """)
+
+@app.get("/signin", response_class=HTMLResponse)
+async def signin_page():
+    """Serve the World ID sign-in page"""
+    try:
+        with open("signin.html", "r") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Sign-in page not found")
+
+@app.get("/atm", response_class=HTMLResponse)
+async def atm_page():
+    """Serve the ATM interface page (requires authentication)"""
+    try:
+        with open("atm.html", "r") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="ATM page not found")
+
+@app.get("/legacy", response_class=HTMLResponse)
+async def legacy_single_page():
+    """Legacy single-page version for testing"""
     try:
         with open("rolu-miniapp-auth-first.html", "r") as f:
             return HTMLResponse(content=f.read())
@@ -323,6 +361,59 @@ async def confirm_payment(request: dict):
         error_message = final_payload.get("error_message", "Payment failed")
         payment_requests[payment_id].update({"status": "failed", "error_message": error_message})
         return {"success": False, "status": "failed", "message": error_message}
+
+@app.post("/api/withdraw")
+async def withdraw_cash(request: dict):
+    """
+    Direct withdrawal endpoint for authenticated users.
+    Used by the ATM page after World ID sign-in.
+    """
+    try:
+        amount = request.get("amount")
+        world_id = request.get("worldId")
+        session_id = request.get("sessionId", f"atm_{int(time.time())}")
+        
+        if not amount or not world_id:
+            raise HTTPException(status_code=400, detail="Amount and World ID required")
+        
+        if amount <= 0 or amount > 500:
+            raise HTTPException(status_code=400, detail="Invalid amount (must be between $0.01 and $500)")
+        
+        # Validate World ID session (basic validation)
+        if not world_id.get("nullifier_hash"):
+            raise HTTPException(status_code=400, detail="Invalid World ID session")
+        
+        # Generate transaction ID
+        transaction_id = f"rolu_{int(time.time())}_{session_id[-8:]}"
+        
+        # Store transaction record
+        transaction_data = {
+            "session_id": session_id,
+            "amount": amount,
+            "world_id": world_id,
+            "status": "completed",
+            "transaction_id": transaction_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        # In production: trigger actual cash dispensing via kiosk API
+        logger.info(f"💰 Direct withdrawal: ${amount} - Transaction: {transaction_id}")
+        logger.info(f"World ID: {world_id.get('nullifier_hash', 'unknown')}")
+        
+        return {
+            "success": True,
+            "message": f"Cash withdrawal successful: ${amount}",
+            "transactionId": transaction_id,
+            "amount": amount,
+            "timestamp": transaction_data["completed_at"]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Withdrawal error: {e}")
+        raise HTTPException(status_code=500, detail="Withdrawal processing failed")
 
 @app.get("/payment-success/{session_id}")
 async def payment_success(session_id: str):
