@@ -7,7 +7,14 @@
     
     <!-- Eruda Mobile Debugging Console -->
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>eruda.init();</script>
+    <script>
+        try {
+            eruda.init();
+            console.log('✅ Eruda initialized successfully');
+        } catch (e) {
+            console.log('❌ Eruda failed to initialize:', e);
+        }
+    </script>
     
     <style>
         body {
@@ -171,7 +178,9 @@
             Withdraw $10.50
         </button>
 
-        <div id="debug-info" class="debug-info" style="display: none;"></div>
+        <div id="debug-info" class="debug-info" style="display: block;"></div>
+        
+        <div id="console-output" style="background: #000; color: #0f0; padding: 10px; margin: 10px 0; font-family: monospace; font-size: 10px; max-height: 300px; overflow-y: auto; border-radius: 5px;"></div>
         
         <div class="footer">
             Powered by World ID • Secure • Private
@@ -179,21 +188,62 @@
     </div>
 
     <script>
+        // AGGRESSIVE ON-PAGE DEBUGGING
+        const consoleOutput = document.getElementById('console-output');
+        const originalLog = console.log;
+        const originalError = console.error;
+        
+        function addToPageConsole(type, ...args) {
+            const timestamp = new Date().toLocaleTimeString();
+            const message = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+            
+            const div = document.createElement('div');
+            div.style.color = type === 'error' ? '#f00' : '#0f0';
+            div.textContent = `[${timestamp}] ${type.toUpperCase()}: ${message}`;
+            consoleOutput.appendChild(div);
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+        
+        // Override console methods to show on page
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            addToPageConsole('log', ...args);
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            addToPageConsole('error', ...args);
+        };
+        
         // Comprehensive debugging
-        console.log('=== ENVIRONMENT DEBUG ===');
-        console.log('window object keys:', Object.keys(window));
-        console.log('navigator.userAgent:', navigator.userAgent);
-        console.log('window.location:', window.location.href);
-        console.log('window.WorldApp:', window.WorldApp);
-        console.log('window.MiniKit:', window.MiniKit);
+        console.log('=== ROLUATM DEBUG START ===');
+        console.log('Page loaded at:', new Date().toISOString());
+        console.log('User Agent:', navigator.userAgent);
+        console.log('URL:', window.location.href);
+        console.log('Window keys:', Object.keys(window).slice(0, 20).join(', ') + '...');
+        
+        // Check for World App objects
+        console.log('window.WorldApp:', !!window.WorldApp);
+        console.log('window.MiniKit:', !!window.MiniKit);
         console.log('typeof window.MiniKit:', typeof window.MiniKit);
         
+        if (window.WorldApp) {
+            console.log('WorldApp object:', JSON.stringify(window.WorldApp, null, 2));
+        }
+        
+        if (window.MiniKit) {
+            console.log('MiniKit keys:', Object.keys(window.MiniKit));
+            console.log('MiniKit.commandsAsync:', !!window.MiniKit.commandsAsync);
+        }
+        
         // Check for various MiniKit possibilities
-        console.log('window.minikit:', window.minikit);
-        console.log('window.Minikit:', window.Minikit);
-        console.log('window.MINIKIT:', window.MINIKIT);
-        console.log('window.worldcoin:', window.worldcoin);
-        console.log('window.Worldcoin:', window.Worldcoin);
+        ['minikit', 'Minikit', 'MINIKIT', 'worldcoin', 'Worldcoin'].forEach(key => {
+            if (window[key]) {
+                console.log(`Found window.${key}:`, typeof window[key]);
+            }
+        });
         
         // Check if we're in World App environment
         const isInWorldApp = typeof window !== 'undefined' && 
