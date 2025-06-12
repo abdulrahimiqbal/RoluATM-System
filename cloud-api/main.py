@@ -551,62 +551,62 @@ async def root():
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     
     <style>
-        body {
+        body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             margin: 0;
             padding: 20px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             color: #333;
-        }
+        }}
         
-        .container {
+        .container {{
             max-width: 400px;
             margin: 0 auto;
             background: white;
             border-radius: 20px;
             padding: 30px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-        }
+        }}
         
-        .header {
+        .header {{
             text-align: center;
             margin-bottom: 30px;
-        }
+        }}
         
-        .logo {
+        .logo {{
             font-size: 32px;
             font-weight: bold;
             color: #2c3e50;
             margin-bottom: 10px;
-        }
+        }}
         
-        .subtitle {
+        .subtitle {{
             font-size: 16px;
             color: #7f8c8d;
-        }
+        }}
         
-        .amount-display {
+        .amount-display {{
             background: linear-gradient(135deg, #4CAF50, #45a049);
             color: white;
             padding: 25px;
             border-radius: 15px;
             text-align: center;
             margin: 20px 0;
-        }
+        }}
         
-        .amount-value {
+        .amount-value {{
             font-size: 36px;
             font-weight: bold;
             margin-bottom: 5px;
-        }
+        }}
         
-        .amount-desc {
+        .amount-desc {{
             opacity: 0.9;
             font-size: 14px;
-        }
+        }}
         
-        .action-button {
+        .action-button {{
             width: 100%;
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
@@ -618,51 +618,56 @@ async def root():
             cursor: pointer;
             margin: 15px 0;
             transition: all 0.3s ease;
-        }
+        }}
         
-        .action-button:hover {
+        .action-button:hover {{
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
-        }
+        }}
         
-        .action-button:disabled {
+        .action-button:active {{
+            transform: translateY(0);
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.2);
+        }}
+        
+        .action-button:disabled {{
             background: #bdc3c7;
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
-        }
+        }}
         
-        .status-message {
+        .status-message {{
             text-align: center;
             padding: 15px;
             border-radius: 10px;
             margin: 15px 0;
             font-weight: 500;
-        }
+        }}
         
-        .status-success {
+        .status-success {{
             background: #d4edda;
             color: #155724;
             border: 1px solid #c3e6cb;
-        }
+        }}
         
-        .status-error {
+        .status-error {{
             background: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
-        }
+        }}
         
-        .status-warning {
+        .status-warning {{
             background: #fff3cd;
             color: #856404;
             border: 1px solid #ffeaa7;
-        }
+        }}
         
-        .status-info {
+        .status-info {{
             background: #d1ecf1;
             color: #0c5460;
             border: 1px solid #bee5eb;
-        }
+        }}
         
         .status-content {{
             line-height: 1.4;
@@ -699,7 +704,7 @@ async def root():
             cursor: not-allowed;
         }}
         
-        .spinner {
+        .spinner {{
             border: 3px solid #f3f3f3;
             border-top: 3px solid #667eea;
             border-radius: 50%;
@@ -708,58 +713,21 @@ async def root():
             animation: spin 1s linear infinite;
             display: inline-block;
             margin-right: 10px;
-        }
+        }}
         
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        @keyframes spin {{
+            0% {{ transform: rotate(0deg); }}
+            100% {{ transform: rotate(360deg); }}
+        }}
         
-        .footer {
+        .footer {{
             text-align: center;
             margin-top: 30px;
             font-size: 12px;
             color: #95a5a6;
-        }
+        }}
     </style>
     <script src="https://minikit.world.org/v1/minikit.js"></script>
-    <script>
-      // Load MiniKit properly with async handling
-      function initMiniKit() {{
-        if (typeof MiniKit !== 'undefined') {{
-          MiniKit.install();
-          MiniKit.init({{
-            app_id: 'app_263013ca6f702add37ad338fa43d4307'
-          }});
-          console.log('MiniKit initialized successfully');
-          return true;
-        }}
-        return false;
-      }}
-      
-      // Try immediate init, then fallback to polling
-      if (!initMiniKit()) {{
-        let attempts = 0;
-        const maxAttempts = 20; // 2 seconds max wait
-        const checkMiniKit = setInterval(() => {{
-          attempts++;
-          if (initMiniKit() || attempts >= maxAttempts) {{
-            clearInterval(checkMiniKit);
-            if (attempts >= maxAttempts) {{
-              console.error('MiniKit failed to load after 2 seconds');
-            }}
-          }}
-        }}, 100);
-      }}
-      
-      // Optional mobile console: add ?debug to URL
-      if (location.search.includes('debug')) {{
-        var s = document.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/npm/eruda';
-        document.head.appendChild(s);
-        s.onload = function () {{ eruda.init(); }};
-      }}
-    </script>
 </head>
 <body>
     <div class="container">
@@ -773,395 +741,42 @@ async def root():
             <div class="amount-desc">Cash Withdrawal + $0.50 fee</div>
         </div>
         
-        <div id="status-message" class="status-message" style="display: none;"></div>
+        <div id="status-message" class="status-message"></div>
         
-        <button id="withdraw-btn" class="action-button">
-            Withdraw $10.50
+        <button id="withdraw-btn" class="action-button" disabled>
+            Initializing...
         </button>
         
         <div class="footer">
             Powered by World ID • Secure • Private
         </div>
     </div>
-
     <script>
         // Application state
-        let appState = {
+        let appState = {{
             sessionId: new URLSearchParams(window.location.search).get('session') || 'demo-session-' + Date.now(),
-        };
+        }};
         
+        let appInitialized = false;
+
         // DOM elements
-        const elements = {
+        const elements = {{
             withdrawBtn: document.getElementById('withdraw-btn'),
             statusMessage: document.getElementById('status-message'),
-        };
-        
-        // Initialize app
-        window.addEventListener('load', () => {{
-            console.log('RoluATM Mini App initialized');
-            console.log('Session ID:', appState.sessionId);
-            
-            // Set up event listeners
-            elements.withdrawBtn.addEventListener('click', handleWithdraw);
-            
-            // Check if we're running in World App
-            if (typeof MiniKit === 'undefined') {{
-                showStatus('Please open this page in World App', 'error');
-                elements.withdrawBtn.disabled = true;
-            }} else {{
-                console.log('MiniKit detected and ready');
-                showStatus('Ready to withdraw cash', 'success');
-            }}
-        }});
+        }};
 
-        async function handleWithdraw() {{
-            try {{
-                // Debug: Log initial state
-                console.log('=== WITHDRAWAL PROCESS STARTED ===');
-                console.log('Session ID:', appState.sessionId);
-                console.log('MiniKit available:', typeof MiniKit !== 'undefined');
-                console.log('MiniKit installed:', typeof MiniKit !== 'undefined' ? MiniKit.isInstalled() : false);
-                
-                if (typeof MiniKit === 'undefined') {{
-                    throw new Error('MiniKit SDK not loaded. Please refresh the page or ensure you are using World App.');
-                }}
-                
-                if (!MiniKit.isInstalled()) {{
-                    throw new Error('MiniKit not properly installed. Please make sure you are opening this page within World App.');
-                }}
-                
-                // Step 1: World ID Verification
-                showStatus('🔍 Step 1/3: Preparing World ID verification...', 'warning');
-                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Verifying...';
-                elements.withdrawBtn.disabled = true;
-
-                console.log('Starting World ID verification...');
-                const verifyPayload = {{
-                    action: 'withdraw-cash',
-                    signal: appState.sessionId,
-                    verification_level: 'orb'
-                }};
-                
-                console.log('World ID verification payload:', verifyPayload);
-                showStatus('🌍 Requesting World ID verification...', 'warning');
-
-                let verifyResponse;
-                try {{
-                    verifyResponse = await MiniKit.commands.verify(verifyPayload);
-                    console.log('World ID verification response:', verifyResponse);
-                }} catch (worldIdError) {{
-                    console.error('World ID verification failed:', worldIdError);
-                    throw new Error(`World ID verification failed: ${{worldIdError.message || 'Unknown error during verification. Please try again.'}}`);
-                }}
-
-                if (!verifyResponse.success) {{
-                    console.error('World ID verification unsuccessful:', verifyResponse);
-                    const errorMsg = verifyResponse.error || 'World ID verification was not successful';
-                    
-                    // Provide specific error messages based on common issues
-                    if (errorMsg.includes('verification_rejected')) {{
-                        throw new Error('❌ You cancelled the World ID verification. Please try again and complete the verification process.');
-                    }} else if (errorMsg.includes('max_verifications_reached')) {{
-                        throw new Error('❌ You have already verified for this action the maximum number of times allowed.');
-                    }} else if (errorMsg.includes('credential_unavailable')) {{
-                        throw new Error('❌ You do not have the required World ID credential. Please verify at an Orb or with your device.');
-                    }} else if (errorMsg.includes('invalid_network')) {{
-                        throw new Error('❌ Network mismatch. Please make sure you are using the correct World App environment.');
-                    }} else {{
-                        throw new Error(`❌ World ID verification failed: ${{errorMsg}}`);
-                    }}
-                }}
-
-                console.log('World ID verification successful:', verifyResponse);
-                showStatus('✅ World ID verified! Moving to payment...', 'success');
-                
-                // Brief pause to show success
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
-                // Step 2: Payment Authorization
-                showStatus('💳 Step 2/3: Initializing payment...', 'warning');
-                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Initializing Payment...';
-                
-                // Initialize payment in backend first
-                console.log('Initializing payment with backend...');
-                let initResponse;
-                try {{
-                    initResponse = await fetch('/api/initiate-payment', {{
-                        method: 'POST',
-                        headers: {{ 'Content-Type': 'application/json' }},
-                        body: JSON.stringify({{ session_id: appState.sessionId, amount: 10.50 }})
-                    }});
-                    
-                    console.log('Payment init response status:', initResponse.status);
-                }} catch (networkError) {{
-                    console.error('Network error during payment initialization:', networkError);
-                    throw new Error('❌ Network error: Unable to connect to payment server. Please check your internet connection and try again.');
-                }}
-                
-                if (!initResponse.ok) {{
-                    let errorDetails = 'Unknown error';
-                    try {{
-                        const errorData = await initResponse.json();
-                        errorDetails = errorData.detail || errorData.message || `HTTP ${{initResponse.status}}`;
-                    }} catch (e) {{
-                        errorDetails = `HTTP ${{initResponse.status}} - ${{initResponse.statusText}}`;
-                    }}
-                    console.error('Payment initialization failed:', errorDetails);
-                    throw new Error(`❌ Payment initialization failed: ${{errorDetails}}. Please try again or contact support.`);
-                }}
-                
-                let reference;
-                try {{
-                    const initData = await initResponse.json();
-                    reference = initData.reference;
-                    console.log('Payment reference obtained:', reference);
-                }} catch (e) {{
-                    console.error('Failed to parse payment initialization response:', e);
-                    throw new Error('❌ Invalid response from payment server. Please try again.');
-                }}
-                
-                if (!reference) {{
-                    throw new Error('❌ No payment reference received from server. Please try again.');
-                }}
-                
-                showStatus('💳 Step 2/3: Requesting payment authorization...', 'warning');
-                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Authorizing Payment...';
-                
-                // World Pay API compliant payload
-                const paymentPayload = {{
-                    reference: reference, // Backend-generated reference ID
-                    to: '{ROLU_WALLET_ADDRESS}', // RoluATM wallet address  
-                    tokens: [{{
-                        symbol: 'USDC',
-                        token_amount: '10500000' // $10.50 in USDC (6 decimals)
-                    }}],
-                    description: 'RoluATM Cash Withdrawal'
-                }};
-                
-                console.log('Payment payload:', paymentPayload);
-
-                let paymentResponse;
-                try {{
-                    paymentResponse = await MiniKit.commands.pay(paymentPayload);
-                    console.log('Payment response:', paymentResponse);
-                }} catch (paymentError) {{
-                    console.error('Payment command failed:', paymentError);
-                    throw new Error(`❌ Payment request failed: ${{paymentError.message || 'Unable to process payment request. Please try again.'}}`);
-                }}
-
-                if (!paymentResponse.success) {{
-                    console.error('Payment unsuccessful:', paymentResponse);
-                    const paymentError = paymentResponse.error || 'Payment was not successful';
-                    
-                    // Provide specific error messages based on common payment issues
-                    if (paymentError.includes('payment_rejected')) {{
-                        throw new Error('❌ You cancelled the payment. Please try again and approve the payment to continue.');
-                    }} else if (paymentError.includes('insufficient_balance')) {{
-                        throw new Error('❌ Insufficient USDC balance. Please add funds to your World App wallet and try again.');
-                    }} else if (paymentError.includes('invalid_receiver')) {{
-                        throw new Error('❌ Invalid receiver address. Please contact support - there may be a configuration issue.');
-                    }} else if (paymentError.includes('transaction_failed')) {{
-                        throw new Error('❌ Transaction failed on blockchain. Please try again in a few moments.');
-                    }} else {{
-                        throw new Error(`❌ Payment failed: ${{paymentError}}`);
-                    }}
-                }}
-                
-                showStatus('🔄 Step 3/3: Verifying payment...', 'warning');
-                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Verifying Payment...';
-
-                // Verify payment in backend
-                console.log('Verifying payment with backend...');
-                let verifyResponse;
-                try {{
-                    verifyResponse = await fetch('/api/confirm-payment', {{
-                        method: 'POST',
-                        headers: {{ 'Content-Type': 'application/json' }},
-                        body: JSON.stringify({{ payload: paymentResponse, reference: reference }})
-                    }});
-                    
-                    console.log('Payment verification response status:', verifyResponse.status);
-                }} catch (networkError) {{
-                    console.error('Network error during payment verification:', networkError);
-                    throw new Error('❌ Network error during payment verification. Your payment may have succeeded - please contact support with reference: ' + reference);
-                }}
-                
-                let verifyResult;
-                try {{
-                    verifyResult = await verifyResponse.json();
-                    console.log('Payment verification result:', verifyResult);
-                }} catch (e) {{
-                    console.error('Failed to parse verification response:', e);
-                    throw new Error('❌ Invalid response during payment verification. Please contact support with reference: ' + reference);
-                }}
-                
-                if (verifyResult.success) {{
-                    console.log('Payment verified:', paymentResponse);
-                    showStatus('✅ Payment confirmed! Dispensing cash...', 'success');
-                    elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Dispensing...';
-                await signalCashDispense();
-                }} else {{
-                    const verifyError = verifyResult.error || 'Payment verification failed';
-                    console.error('Payment verification failed:', verifyError);
-                    throw new Error(`❌ Payment verification failed: ${{verifyError}}. Please contact support with reference: ${{reference}}`);
-                }}
-
-            }} catch (error) {{
-                console.error('Withdrawal process failed:', error);
-                
-                // Use enhanced error reporting
-                reportError(error, 'Withdrawal process');
-                
-                // Enhanced error display
-                const errorMessage = error.message || 'An unexpected error occurred';
-                showStatus(errorMessage, 'error');
-                
-                // Log detailed error for debugging
-                console.error('=== WITHDRAWAL ERROR DETAILS ===');
-                console.error('Error:', error);
-                console.error('Stack:', error.stack);
-                console.error('Session ID:', appState.sessionId);
-                console.error('Timestamp:', new Date().toISOString());
-                
-                elements.withdrawBtn.innerHTML = 'Retry Withdrawal';
-                elements.withdrawBtn.disabled = false;
-                
-                // Send error feedback to user's device
-                if (typeof MiniKit !== 'undefined' && MiniKit.commands && MiniKit.commands.sendHapticFeedback) {{
-                    try {{
-                        MiniKit.commands.sendHapticFeedback({{ type: 'error' }});
-                    }} catch (hapticError) {{
-                        console.warn('Could not send haptic feedback:', hapticError);
-                    }}
-                }}
-            }}
-        }}
-        
-        // Signal Cash Dispenser
-        async function signalCashDispense() {{
-            try {{
-                console.log('=== CASH DISPENSE PROCESS STARTED ===');
-                showStatus('🏧 Contacting ATM hardware...', 'warning');
-                
-                // Send signal to your backend to activate the TFlex dispenser
-                console.log('Sending dispense signal to backend...');
-                let response;
-                try {{
-                    response = await fetch('https://rolu-atm-system.vercel.app/confirm-withdrawal', {{
-                    method: 'POST',
-                        headers: {{
-                        'Content-Type': 'application/json'
-                        }},
-                        body: JSON.stringify({{
-                        kiosk_id: 'demo-kiosk-001',
-                        session_id: appState.sessionId,
-                        coins_dispensed: 40, // 40 quarters = $10
-                        timestamp: new Date().toISOString()
-                        }})
-                    }});
-                    
-                    console.log('Dispense response status:', response.status);
-                }} catch (networkError) {{
-                    console.error('Network error during cash dispense:', networkError);
-                    throw new Error('❌ Network error: Unable to connect to ATM hardware. Please contact support.');
-                }}
-                
-                let responseData;
-                try {{
-                    responseData = await response.json();
-                    console.log('Dispense response data:', responseData);
-                }} catch (e) {{
-                    console.warn('Could not parse dispense response as JSON, checking status...');
-                    responseData = null;
-                }}
-                
-                if (response.ok) {{
-                    console.log('Cash dispense successful');
-                    showStatus('✅ Cash dispensed successfully! Please collect your quarters. Thank you!', 'success');
-                    elements.withdrawBtn.innerHTML = '✅ Transaction Complete';
-                    
-                    // Send haptic feedback
-                    if (typeof MiniKit !== 'undefined') {{
-                        try {{
-                            MiniKit.commands.sendHapticFeedback({{ type: 'success' }});
-                        }} catch (hapticError) {{
-                            console.warn('Could not send success haptic feedback:', hapticError);
-                        }}
-                    }}
-                    
-                }} else {{
-                    let errorMsg = 'Dispenser communication failed';
-                    
-                    if (responseData && responseData.error) {{
-                        errorMsg = responseData.error;
-                    }} else if (responseData && responseData.detail) {{
-                        errorMsg = responseData.detail;
-                    }} else {{
-                        errorMsg = `HTTP ${{response.status}} - ${{response.statusText || 'Unknown error'}}`;
-                    }}
-                    
-                    console.error('Cash dispense failed:', errorMsg);
-                    throw new Error(`❌ ATM Hardware Error: ${{errorMsg}}`);
-                }}
-                
-            }} catch (error) {{
-                console.error('Cash dispense failed:', error);
-                
-                // Use enhanced error reporting
-                reportError(error, 'Cash dispense process');
-                
-                // Enhanced error message for cash dispense
-                let errorMessage = error.message || 'Unknown dispenser error';
-                
-                // Add specific troubleshooting based on error type
-                if (errorMessage.includes('Network error')) {{
-                    errorMessage += ' The ATM may be offline or experiencing connectivity issues.';
-                }} else if (errorMessage.includes('HTTP 503')) {{
-                    errorMessage += ' The ATM service is temporarily unavailable. Please try again in a few minutes.';
-                }} else if (errorMessage.includes('HTTP 404')) {{
-                    errorMessage += ' The ATM endpoint is not configured properly. Please contact support.';
-                }}
-                
-                showStatus(errorMessage + ' Please contact support if the issue persists.', 'error');
-                
-                // Log detailed error information
-                console.error('=== CASH DISPENSE ERROR DETAILS ===');
-                console.error('Error:', error);
-                console.error('Session ID:', appState.sessionId);
-                console.error('Timestamp:', new Date().toISOString());
-                console.error('ATM Status: Failed to dispense');
-                
-                elements.withdrawBtn.innerHTML = 'Contact Support';
-                elements.withdrawBtn.disabled = true;
-                
-                // Send error haptic feedback
-                if (typeof MiniKit !== 'undefined' && MiniKit.commands && MiniKit.commands.sendHapticFeedback) {{
-                    try {{
-                        MiniKit.commands.sendHapticFeedback({{ type: 'error' }});
-                    }} catch (hapticError) {{
-                        console.warn('Could not send error haptic feedback:', hapticError);
-                    }}
-                }}
-            }}
-        }}
-        
         // UI Helper Functions
         function showStatus(message, type = 'info') {{
-            console.log(`Status [${type.toUpperCase()}]:`, message);
+            console.log(`Status [${{type.toUpperCase()}}]:`, message);
             
             const statusElement = elements.statusMessage;
             
-            // Clear existing classes
-            statusElement.classList.remove('success', 'error', 'warning', 'info');
-            statusElement.classList.add(type);
+            statusElement.className = 'status-message'; // Reset classes
+            statusElement.classList.add(`status-${{type}}`);
             
-            // Handle long messages by making them scrollable
-            statusElement.innerHTML = `<div class="status-content">${message}</div>`;
-            
-            // Auto-scroll to bottom if content overflows
+            statusElement.innerHTML = `<div class="status-content">${{message}}</div>`;
             statusElement.scrollTop = statusElement.scrollHeight;
             
-            // For error messages, make them more prominent
             if (type === 'error') {{
                 statusElement.style.minHeight = 'auto';
                 statusElement.style.maxHeight = '120px';
@@ -1174,7 +789,7 @@ async def root():
             }}
         }}
 
-        // Debug information display (for troubleshooting)
+        // Debug information display
         function showDebugInfo() {{
             const debugInfo = {{
                 sessionId: appState.sessionId,
@@ -1182,13 +797,8 @@ async def root():
                 miniKitInstalled: typeof MiniKit !== 'undefined' ? MiniKit.isInstalled() : false,
                 userAgent: navigator.userAgent,
                 timestamp: new Date().toISOString(),
-                url: window.location.href,
-                isWorldApp: window.location.href.includes('worldapp') || navigator.userAgent.includes('WorldApp')
             }};
-            
-            console.log('=== DEBUG INFORMATION ===');
-            console.log(JSON.stringify(debugInfo, null, 2));
-            
+            console.log('=== DEBUG INFORMATION ===', JSON.stringify(debugInfo, null, 2));
             return debugInfo;
         }}
         
@@ -1198,35 +808,226 @@ async def root():
                 error: {{
                     message: error.message,
                     stack: error.stack,
-                    name: error.name
                 }},
                 context: context,
                 debugInfo: showDebugInfo(),
-                timestamp: new Date().toISOString()
             }};
-            
-            console.error('=== ERROR REPORT ===');
-            console.error(JSON.stringify(errorReport, null, 2));
-            
-            // In production, you could send this to an error tracking service
-            // like Sentry, LogRocket, etc.
-            
+            console.error('=== ERROR REPORT ===', JSON.stringify(errorReport, null, 2));
             return errorReport;
         }}
         
-        // Add global error handler for uncaught errors
-        window.addEventListener('error', function(event) {{
-            reportError(event.error, 'Global error handler');
-        }});
+        // Global error handlers
+        window.addEventListener('error', (event) => reportError(event.error, 'Global error handler'));
+        window.addEventListener('unhandledrejection', (event) => reportError(new Error(event.reason), 'Unhandled promise rejection'));
+
+        // Main app initialization logic
+        function initializeApp() {{
+            if (appInitialized) return; // Run only once
+            appInitialized = true;
+            
+            console.log('RoluATM Mini App initialized');
+            elements.withdrawBtn.addEventListener('click', handleWithdraw);
+            
+            elements.withdrawBtn.disabled = false;
+            elements.withdrawBtn.innerHTML = 'Withdraw $10.50';
+            showStatus('Ready to withdraw $10.50', 'success');
+        }}
+
+        async function handleWithdraw() {{
+            try {{
+                console.log('=== WITHDRAWAL PROCESS STARTED ===');
+                if (typeof MiniKit === 'undefined' || !MiniKit.isInstalled()) {{
+                    throw new Error('MiniKit not properly installed. Please open this page within World App.');
+                }}
+                
+                showStatus('🔍 Step 1/3: Preparing World ID verification...', 'warning');
+                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Verifying...';
+                elements.withdrawBtn.disabled = true;
+
+                const verifyPayload = {{
+                    action: 'withdraw-cash',
+                    signal: appState.sessionId,
+                    verification_level: 'orb'
+                }};
+                
+                showStatus('🌍 Requesting World ID verification...', 'warning');
+                const verifyResponse = await MiniKit.commands.verify(verifyPayload);
+
+                if (!verifyResponse.success) {{
+                    const errorMsg = verifyResponse.error || 'Verification was not successful';
+                    if (errorMsg.includes('verification_rejected')) {{
+                        throw new Error('❌ You cancelled the World ID verification. Please try again.');
+                    }} else if (errorMsg.includes('max_verifications_reached')) {{
+                        throw new Error('❌ You have already verified for this action.');
+                    }}
+                    throw new Error(`❌ World ID verification failed: ${{errorMsg}}`);
+                }}
+
+                showStatus('✅ World ID verified! Moving to payment...', 'success');
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                showStatus('💳 Step 2/3: Initializing payment...', 'warning');
+                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Initializing Payment...';
+                
+                const initResponse = await fetch('/api/initiate-payment', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ session_id: appState.sessionId, amount: 10.50 }})
+                }});
+                
+                if (!initResponse.ok) {{
+                    const errorData = await initResponse.json();
+                    throw new Error(`❌ Payment initialization failed: ${{errorData.detail || `HTTP ${{initResponse.status}}`}}`);
+                }}
+                
+                const {{ reference }} = await initResponse.json();
+                
+                showStatus('💳 Step 2/3: Requesting payment authorization...', 'warning');
+                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Authorizing Payment...';
+                
+                const paymentPayload = {{
+                    reference: reference,
+                    to: '{ROLU_WALLET_ADDRESS}',
+                    tokens: [{{ symbol: 'USDC', token_amount: '10500000' }}],
+                    description: 'RoluATM Cash Withdrawal'
+                }};
+                
+                const paymentResponse = await MiniKit.commands.pay(paymentPayload);
+
+                if (!paymentResponse.success) {{
+                    const paymentError = paymentResponse.error || 'Payment was not successful';
+                    if (paymentError.includes('payment_rejected')) {{
+                        throw new Error('❌ You cancelled the payment. Please try again.');
+                    }} else if (paymentError.includes('insufficient_balance')) {{
+                        throw new Error('❌ Insufficient USDC balance. Please add funds and try again.');
+                    }}
+                    throw new Error(`❌ Payment failed: ${{paymentError}}`);
+                }}
+                
+                showStatus('🔄 Step 3/3: Verifying payment...', 'warning');
+                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Verifying Payment...';
+
+                const confirmResponse = await fetch('/api/confirm-payment', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ payload: paymentResponse, reference: reference }})
+                }});
+                
+                const confirmResult = await confirmResponse.json();
+                
+                if (confirmResult.success) {{
+                    showStatus('✅ Payment confirmed! Dispensing cash...', 'success');
+                    elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Dispensing...';
+                    await signalCashDispense();
+                }} else {{
+                    throw new Error(`❌ Payment verification failed: ${{confirmResult.error || 'Unknown error'}}`);
+                }}
+
+            }} catch (error) {{
+                reportError(error, 'Withdrawal process');
+                showStatus(error.message || 'An unexpected error occurred', 'error');
+                elements.withdrawBtn.innerHTML = 'Retry Withdrawal';
+                elements.withdrawBtn.disabled = false;
+                if (typeof MiniKit !== 'undefined') {{
+                    MiniKit.commands.sendHapticFeedback({{ type: 'error' }});
+                }}
+            }}
+        }}
         
-        window.addEventListener('unhandledrejection', function(event) {{
-            reportError(new Error(event.reason), 'Unhandled promise rejection');
+        async function signalCashDispense() {{
+            try {{
+                console.log('=== CASH DISPENSE PROCESS STARTED ===');
+                showStatus('🏧 Contacting ATM hardware...', 'warning');
+                
+                const response = await fetch('https://rolu-atm-system.vercel.app/confirm-withdrawal', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{
+                        kiosk_id: 'demo-kiosk-001',
+                        session_id: appState.sessionId,
+                        coins_dispensed: 40,
+                        timestamp: new Date().toISOString()
+                    }})
+                }});
+                
+                if (response.ok) {{
+                    showStatus('✅ Cash dispensed successfully! Please collect your quarters.', 'success');
+                    elements.withdrawBtn.innerHTML = '✅ Transaction Complete';
+                    if (typeof MiniKit !== 'undefined') {{
+                        MiniKit.commands.sendHapticFeedback({{ type: 'success' }});
+                    }}
+                }} else {{
+                    const errorData = await response.json().catch(() => ({{}}));
+                    throw new Error(`❌ ATM Hardware Error: ${{errorData.detail || `HTTP ${{response.status}}`}}`);
+                }}
+                
+            }} catch (error) {{
+                reportError(error, 'Cash dispense process');
+                showStatus(error.message, 'error');
+                elements.withdrawBtn.innerHTML = 'Contact Support';
+                elements.withdrawBtn.disabled = true;
+                if (typeof MiniKit !== 'undefined') {{
+                    MiniKit.commands.sendHapticFeedback({{ type: 'error' }});
+                }}
+            }}
+        }}
+
+        // MiniKit loading and initialization logic
+        function initMiniKit() {{
+            if (typeof MiniKit !== 'undefined') {{
+                try {{
+                    MiniKit.install();
+                    MiniKit.init({{ app_id: '{WORLD_ID_APP_ID}' }});
+                    console.log('MiniKit initialized successfully');
+                    initializeApp();
+                    return true;
+                }} catch (e) {{
+                    reportError(e, 'MiniKit Init');
+                    showStatus(`Error: MiniKit failed to initialize. ${{e.message}}`, 'error');
+                    elements.withdrawBtn.disabled = true;
+                    return false;
+                }}
+            }}
+            return false;
+        }}
+
+        // Main entry point
+        window.addEventListener('load', () => {{
+            elements.withdrawBtn.disabled = true;
+            showStatus('Initializing RoluATM...', 'info');
+            
+            if (!initMiniKit()) {{
+                let attempts = 0;
+                const interval = setInterval(() => {{
+                    attempts++;
+                    if (initMiniKit() || attempts >= 20) {{
+                        clearInterval(interval);
+                        if (!appInitialized && attempts >= 20) {{
+                            showStatus('Error: Could not connect to World App. Please restart.', 'error');
+                            reportError(new Error('MiniKit polling failed'), 'MiniKit Loader');
+                        }}
+                    }}
+                }}, 100);
+            }}
+            
+            if (location.search.includes('debug')) {{
+                const s = document.createElement('script');
+                s.src = 'https://cdn.jsdelivr.net/npm/eruda';
+                document.head.appendChild(s);
+                s.onload = () => eruda.init();
+            }}
         }});
     </script>
 </body>
 </html>
-    """
-    return HTMLResponse(content=html_content)
+"""
+    # Inject environment variables into the HTML content
+    # Using .format() to avoid issues with f-strings and JS braces
+    final_html = html_content.format(
+        WORLD_ID_APP_ID=WORLD_ID_APP_ID,
+        ROLU_WALLET_ADDRESS=ROLU_WALLET_ADDRESS
+    )
+    return HTMLResponse(content=final_html)
 
 
 @app.get("/status")
