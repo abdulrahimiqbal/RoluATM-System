@@ -3,7 +3,10 @@
   "builds": [
     {
       "src": "cloud-api/main.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "15mb"
+      }
     }
   ],
   "routes": [
@@ -11,5 +14,10 @@
       "src": "/(.*)",
       "dest": "cloud-api/main.py"
     }
-  ]
+  ],
+  "functions": {
+    "cloud-api/main.py": {
+      "includeFiles": "cloud-api/**"
+    }
+  }
 } 
