@@ -641,15 +641,16 @@ async def root():
                 console.error('initMiniKit called, but MiniKit object is not available.');
                 return;
             }}
-            try {{
-                MiniKit.install();
-                MiniKit.init({{ app_id: '{WORLD_ID_APP_ID}' }});
-                console.log('MiniKit initialized successfully');
-                initializeApp();
-            }} catch (e) {{
-                showStatus(`❌ Error: Could not initialize World App: ${{e.message}}`, 'error');
-                console.error("MiniKit initialization failed:", e);
+            
+            // Check if MiniKit is properly installed (running in World App)
+            if (!MiniKit.isInstalled()) {{
+                showStatus('❌ Error: Please open this page in the World App.', 'error');
+                console.error('MiniKit is not installed - not running in World App.');
+                return;
             }}
+            
+            console.log('MiniKit is properly installed and ready');
+            initializeApp();
         }}
 
         window.addEventListener('load', () => {{
