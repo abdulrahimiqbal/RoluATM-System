@@ -429,8 +429,9 @@ async def test_endpoint():
 async def payment_interface(session_id: str, request: Request):
     """Generate World ID Mini App payment interface"""
     
-    # Generate the correct Mini App URL format with session parameter
-    mini_app_url = f"worldapp://mini-app?app_id={WORLD_ID_APP_ID}&path=/miniapp?session={session_id}"
+    # For external QR codes, use the External Integration format that redirects to Mini App
+    # This format works when scanned from any camera/browser and redirects to World App
+    external_redirect_url = f"https://worldcoin.org/verify?app_id={WORLD_ID_APP_ID}&action={WORLD_ID_ACTION}&signal={session_id}&redirect_uri=https://rolu-atm-system.vercel.app/miniapp?session={session_id}"
     
     html_content = f"""
     <!DOCTYPE html>
@@ -576,7 +577,7 @@ async def payment_interface(session_id: str, request: Request):
                 and authorize the withdrawal
             </div>
             
-            <a href="{mini_app_url}" class="verify-button">
+            <a href="{external_redirect_url}" class="verify-button">
                 Open RoluATM Mini App
             </a>
             
@@ -585,7 +586,7 @@ async def payment_interface(session_id: str, request: Request):
                 <div class="qr-code">
                     <canvas id="qrcode"></canvas>
                 </div>
-                <div class="verify-url">{mini_app_url}</div>
+                <div class="verify-url">{external_redirect_url}</div>
             </div>
             
             <div class="footer">
@@ -595,7 +596,7 @@ async def payment_interface(session_id: str, request: Request):
         
         <script>
             // Generate QR code for Mini App
-            QRCode.toCanvas(document.getElementById('qrcode'), '{mini_app_url}', {{
+            QRCode.toCanvas(document.getElementById('qrcode'), '{external_redirect_url}', {{
                 width: 200,
                 height: 200,
                 margin: 2,
@@ -605,7 +606,7 @@ async def payment_interface(session_id: str, request: Request):
                 }}
             }}, function (error) {{
                 if (error) console.error(error);
-                console.log('Mini App QR code generated successfully!');
+                console.log('External redirect QR code generated successfully!');
             }});
             
             // Auto-refresh verification status
