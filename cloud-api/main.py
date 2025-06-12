@@ -766,21 +766,32 @@ async def root():
             // Try to init immediately. If it fails, start polling.
             if (!initMiniKit()) {{
                 let attempts = 0;
-                const maxAttempts = 30; // 3 seconds
+                const maxAttempts = 80; // Increased to 8 seconds for more resilience
+                console.log('MiniKit not found immediately. Starting to poll...');
                 const interval = setInterval(() => {{
                     attempts++;
                     if (initMiniKit()) {{
                         // Successfully initialized
+                        console.log(`MiniKit found after ${{attempts * 100}}ms.`);
                         clearInterval(interval);
                     }} else if (attempts >= maxAttempts) {{
                         // Failed to initialize after timeout
                         clearInterval(interval);
-                        showStatus('Error: Could not load World App components. Please restart the app.', 'error');
-                        console.error('MiniKit failed to load after timeout.');
+                        const finalErrorMessage = 'Could not connect to World App components. <a href="#" onclick="manualInit()">Try again</a>';
+                        showStatus(`❌ Error: ${{finalErrorMessage}}`, 'error');
+                        console.error('MiniKit timed out. This is unexpected when running inside World App.');
                     }}
                 }}, 100);
             }}
         }});
+
+        function manualInit() {{
+            console.log('Manual initialization triggered!');
+            showStatus('Retrying initialization...', 'info');
+            if (!initMiniKit()) {{
+                showStatus('❌ Error: Manual initialization failed. Please restart the app.', 'error');
+            }}
+        }}
     </script>
 </body>
 </html>
