@@ -77,7 +77,7 @@ logger.info(f"Database URL configured: {bool(DATABASE_URL)}")
 # Create database engine with error handling
 try:
     if DATABASE_URL and DATABASE_URL != "sqlite:///./test.db" and DB_MODELS_AVAILABLE:
-        engine = create_engine(DATABASE_URL, echo=False)
+engine = create_engine(DATABASE_URL, echo=False)
         DATABASE_CONNECTED = True
     else:
         engine = None
@@ -557,7 +557,7 @@ async def root():
         <p>Your portal to digital cash</p>
         <div id="status" class="status info">Initializing...</div>
         <button id="withdraw-btn" disabled>Loading...</button>
-    </div>
+        </div>
     <script>
         const elements = {{
             statusDiv: document.getElementById('status'),
@@ -695,7 +695,7 @@ async def root():
             console.log('=== END DEBUG ===');
             
             elements.withdrawBtn.addEventListener('click', handleWithdraw);
-            elements.withdrawBtn.disabled = false;
+                elements.withdrawBtn.disabled = false;
             elements.withdrawBtn.innerHTML = 'Withdraw $10.50';
             showStatus('Ready to withdraw cash', 'success');
         }}
