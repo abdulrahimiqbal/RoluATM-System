@@ -99,8 +99,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="RoluATM Cloud API",
     description="World ID-verified cryptocurrency ATM service",
-    version="1.0.0",
-    lifespan=lifespan
+    version="1.0.0"
+    # lifespan=lifespan  # Temporarily disabled for Vercel compatibility
 )
 
 # CORS middleware
@@ -532,10 +532,9 @@ async def root():
     }
 
 
-# For Vercel deployment - create ASGI handler function
-async def handler(scope, receive, send):
-    """ASGI handler for Vercel"""
-    await app(scope, receive, send)
+# For Vercel deployment - use Mangum adapter
+from mangum import Mangum
+handler = Mangum(app, lifespan="off")
 
 # For local development
 if __name__ == "__main__":

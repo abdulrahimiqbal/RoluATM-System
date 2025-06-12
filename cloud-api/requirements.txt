@@ -8,4 +8,5 @@ python-multipart==0.0.6
 httpx==0.25.2
 cryptography==41.0.7
 python-jose[cryptography]==3.3.0
-sse-starlette==1.6.5 
+sse-starlette==1.6.5
+mangum==0.17.0 
