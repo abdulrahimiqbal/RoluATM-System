@@ -76,7 +76,7 @@ logger.info(f"Database URL configured: {bool(DATABASE_URL)}")
 # Create database engine with error handling
 try:
     if DATABASE_URL and DATABASE_URL != "sqlite:///./test.db" and DB_MODELS_AVAILABLE:
-        engine = create_engine(DATABASE_URL, echo=False)
+engine = create_engine(DATABASE_URL, echo=False)
         DATABASE_CONNECTED = True
     else:
         engine = None
@@ -999,7 +999,7 @@ async def root():
                     console.log('Payment verified:', paymentResponse);
                     showStatus('✅ Payment confirmed! Dispensing cash...', 'success');
                     elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Dispensing...';
-                    await signalCashDispense();
+                await signalCashDispense();
                 }} else {{
                     const verifyError = verifyResult.error || 'Payment verification failed';
                     console.error('Payment verification failed:', verifyError);
@@ -1048,15 +1048,15 @@ async def root():
                 let response;
                 try {{
                     response = await fetch('https://rolu-atm-system.vercel.app/confirm-withdrawal', {{
-                        method: 'POST',
+                    method: 'POST',
                         headers: {{
-                            'Content-Type': 'application/json'
+                        'Content-Type': 'application/json'
                         }},
                         body: JSON.stringify({{
-                            kiosk_id: 'demo-kiosk-001',
-                            session_id: appState.sessionId,
-                            coins_dispensed: 40, // 40 quarters = $10
-                            timestamp: new Date().toISOString()
+                        kiosk_id: 'demo-kiosk-001',
+                        session_id: appState.sessionId,
+                        coins_dispensed: 40, // 40 quarters = $10
+                        timestamp: new Date().toISOString()
                         }})
                     }});
                     
