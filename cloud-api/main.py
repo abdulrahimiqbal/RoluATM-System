@@ -690,8 +690,8 @@ async def root():
             color: #95a5a6;
         }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@0.0.44/dist/minikit.js"></script>
     <script src="https://minikit.world.org/v1/minikit.js"></script>
+    <script>MiniKit.install();</script>
 </head>
 <body>
     <div class="container">
@@ -1015,6 +1015,7 @@ async def mini_app_interface(session: str = None):
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>RoluATM Mini App</title>
         <script src="https://minikit.world.org/v1/minikit.js"></script>
+        <script>MiniKit.install();</script>
         <style>
             body {{ font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }}
             .container {{ max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; }}
