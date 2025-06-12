@@ -692,6 +692,15 @@ async def root():
     </style>
     <script src="https://minikit.world.org/v1/minikit.js"></script>
     <script>MiniKit.install();</script>
+    <!-- Optional mobile console: add ?debug to URL -->
+    <script>
+      if (location.search.includes('debug')) {{
+        var s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/eruda';
+        document.head.appendChild(s);
+        s.onload = function () {{ eruda.init(); }};
+      }}
+    </script>
 </head>
 <body>
     <div class="container">
@@ -1016,6 +1025,15 @@ async def mini_app_interface(session: str = None):
         <title>RoluATM Mini App</title>
         <script src="https://minikit.world.org/v1/minikit.js"></script>
         <script>MiniKit.install();</script>
+        <!-- Optional mobile console: add ?debug to URL -->
+        <script>
+          if (location.search.includes('debug')) {{
+            var s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/eruda';
+            document.head.appendChild(s);
+            s.onload = function () {{ eruda.init(); }};
+          }}
+        </script>
         <style>
             body {{ font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }}
             .container {{ max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; }}
