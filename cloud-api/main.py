@@ -22,20 +22,30 @@ from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+# Import database models with proper error handling
 try:
     from db.models import (
         User, Kiosk, Transaction, KioskHealthLog, WorldIDVerification,
         TransactionStatus, create_db_and_tables
     )
-except ImportError:
-    # Fallback for Vercel deployment
-    import sys
-    import os
-    sys.path.append(os.path.dirname(__file__))
-    from db.models import (
-        User, Kiosk, Transaction, KioskHealthLog, WorldIDVerification,
-        TransactionStatus, create_db_and_tables
-    )
+    DB_MODELS_AVAILABLE = True
+except ImportError as e:
+    # For Vercel deployment - create minimal mock models
+    logging.warning(f"Database models import failed: {e}")
+    DB_MODELS_AVAILABLE = False
+    
+    # Mock models for basic API functionality
+    class User: pass
+    class Kiosk: pass
+    class Transaction: pass
+    class KioskHealthLog: pass
+    class WorldIDVerification: pass
+    class TransactionStatus:
+        PENDING = "pending"
+        COMPLETED = "completed"
+        FAILED = "failed"
+    
+    def create_db_and_tables(engine): pass
 
 # Load environment variables
 load_dotenv()
@@ -58,8 +68,19 @@ logger.info(f"World ID App ID: {WORLD_ID_APP_ID}")
 logger.info(f"World ID Action: {WORLD_ID_ACTION}")
 logger.info(f"Database URL configured: {bool(DATABASE_URL)}")
 
-# Create database engine
-engine = create_engine(DATABASE_URL, echo=False)
+# Create database engine with error handling
+try:
+    if DATABASE_URL and DATABASE_URL != "sqlite:///./test.db" and DB_MODELS_AVAILABLE:
+        engine = create_engine(DATABASE_URL, echo=False)
+        DATABASE_CONNECTED = True
+    else:
+        engine = None
+        DATABASE_CONNECTED = False
+        logger.warning("Database engine not initialized - limited functionality")
+except Exception as e:
+    logger.error(f"Database engine creation failed: {e}")
+    engine = None
+    DATABASE_CONNECTED = False
 
 # SSE connections store
 sse_connections: dict[str, list] = {}
@@ -115,6 +136,8 @@ app.add_middleware(
 
 # Dependency to get database session
 def get_session():
+    if not engine or not DATABASE_CONNECTED:
+        raise HTTPException(status_code=503, detail="Database not available")
     with Session(engine) as session:
         yield session
 
@@ -231,7 +254,7 @@ async def health_check():
         }
     }
     
-    if DATABASE_URL and DATABASE_URL != "sqlite:///./test.db":
+    if DATABASE_URL and DATABASE_URL != "sqlite:///./test.db" and engine and DATABASE_CONNECTED:
         try:
             # Test database connectivity
             with Session(engine) as session:
@@ -242,7 +265,7 @@ async def health_check():
             response["database"] = f"error: {str(e)}"
             response["status"] = "degraded"
     else:
-        response["database"] = "not_configured"
+        response["database"] = "not_configured" if not DATABASE_URL else "not_connected"
         response["status"] = "limited"
     
     return response
