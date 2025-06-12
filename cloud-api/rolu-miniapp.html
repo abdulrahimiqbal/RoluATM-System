@@ -194,8 +194,9 @@
             console.log('RoluATM initializing...');
             
             // Create aggressive on-page debugging console
+            let consoleOutput;
             if (!document.getElementById('debug-console')) {
-                const consoleOutput = document.createElement('div');
+                consoleOutput = document.createElement('div');
                 consoleOutput.id = 'debug-console';
                 consoleOutput.style.cssText = `
                     position: fixed; top: 0; left: 0; right: 0; 
@@ -204,6 +205,8 @@
                     overflow-y: auto; z-index: 9999; border-bottom: 2px solid #0f0;
                 `;
                 document.querySelector('.container').appendChild(consoleOutput);
+            } else {
+                consoleOutput = document.getElementById('debug-console');
             }
             
             // AGGRESSIVE ON-PAGE DEBUGGING
