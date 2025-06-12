@@ -682,13 +682,25 @@ async def root():
             console.log('In iframe:', window !== window.top);
             console.log('Referrer:', document.referrer || 'none');
             
-            // Skip the unreliable isInstalled() check and proceed directly
-            // The MiniKit object being available is sufficient proof we're in World App
+            // Install MiniKit with the app ID
             try {{
+                console.log('Installing MiniKit with app ID...');
+                const installResult = MiniKit.install('app_263013ca6f702add37ad338fa43d4307');
+                console.log('MiniKit install result:', installResult);
+                
+                if (!installResult.success) {{
+                    console.error('MiniKit installation failed:', installResult);
+                    showStatus(`❌ Error: ${{installResult.errorMessage}}`, 'error');
+                    return;
+                }}
+                
+                console.log('MiniKit installed successfully, checking isInstalled again...');
+                console.log('MiniKit.isInstalled() after install:', MiniKit.isInstalled());
+                
                 console.log('Attempting to initialize app...');
                 initializeApp();
             }} catch (error) {{
-                console.error('Error during app initialization:', error);
+                console.error('Error during MiniKit installation:', error);
                 showStatus('❌ Error: Failed to initialize. Please try refreshing the page.', 'error');
             }}
         }}
