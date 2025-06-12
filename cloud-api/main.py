@@ -552,7 +552,12 @@ async def root():
         "service": "RoluATM Cloud API",
         "version": "1.0.0",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "status": "operational"
+        "status": "operational",
+        "debug": {
+            "db_models_available": DB_MODELS_AVAILABLE,
+            "database_connected": DATABASE_CONNECTED,
+            "engine_available": engine is not None
+        }
     }
 
 
