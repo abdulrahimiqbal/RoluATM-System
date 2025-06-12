@@ -191,7 +191,7 @@ async def verify_world_id(payload: WorldIDPayload) -> bool:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                "https://developer.worldcoin.org/api/v1/verify",
+                f"https://developer.worldcoin.org/api/v2/verify/{WORLD_ID_APP_ID}",
                 json={
                     "nullifier_hash": payload.nullifier_hash,
                     "merkle_root": payload.merkle_root,

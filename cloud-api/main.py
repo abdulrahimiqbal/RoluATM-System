@@ -73,7 +73,7 @@ logger.info(f"Database URL configured: {bool(DATABASE_URL)}")
 # Create database engine with error handling
 try:
     if DATABASE_URL and DATABASE_URL != "sqlite:///./test.db" and DB_MODELS_AVAILABLE:
-        engine = create_engine(DATABASE_URL, echo=False)
+engine = create_engine(DATABASE_URL, echo=False)
         DATABASE_CONNECTED = True
     else:
         engine = None
@@ -193,7 +193,7 @@ async def verify_world_id(payload: WorldIDPayload) -> bool:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                "https://developer.worldcoin.org/api/v1/verify",
+                f"https://developer.worldcoin.org/api/v2/verify/{WORLD_ID_APP_ID}",
                 json={
                     "nullifier_hash": payload.nullifier_hash,
                     "merkle_root": payload.merkle_root,
