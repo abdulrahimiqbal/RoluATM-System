@@ -657,12 +657,13 @@ async def root():
             console.log('Loading MiniKit script...');
             
             const script = document.createElement('script');
-            script.src = 'https://minikit.world.org/v1/minikit.js';
-            
-            script.onload = () => {{
+            script.type = 'module';
+            script.innerHTML = `
+                import {{ MiniKit }} from 'https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@1.9.6/+esm';
+                window.MiniKit = MiniKit;
                 console.log('MiniKit script has successfully loaded.');
                 initMiniKit();
-            }};
+            `;
             
             script.onerror = () => {{
                 console.error('CRITICAL: The MiniKit script failed to load.');
