@@ -152,9 +152,9 @@ def get_session():
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    # Serve the rolu-miniapp.html file from the root directory
+    # Serve the rolu-miniapp.html file from the same directory
     try:
-        with open("../rolu-miniapp.html", "r") as f:
+        with open("rolu-miniapp.html", "r") as f:
             return HTMLResponse(content=f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="rolu-miniapp.html not found")
