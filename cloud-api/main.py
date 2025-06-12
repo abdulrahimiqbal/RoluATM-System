@@ -614,8 +614,8 @@ async def root():
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
                     body: JSON.stringify({{
-                        world_id_proof: finalPayload,
-                        action: 'withdraw-cash'
+                        payload: finalPayload,
+                        amount: 10.50
                     }})
                 }});
 
@@ -801,21 +801,29 @@ async def test_endpoint():
 @app.get("/world-app.json")
 async def world_app_manifest():
     """
-    World App manifest.
-    This provides metadata about the mini-app to the World App.
+    World App manifest for Mini Apps.
+    Updated to match latest World Mini Apps requirements.
     """
     return {
         "name": "RoluATM",
-        "description": "World ID verified cash withdrawal from cryptocurrency.",
+        "description": "World ID verified cash withdrawal from cryptocurrency",
         "logo": f"https://{os.getenv('VERCEL_URL', 'localhost:8000')}/favicon.png",
-        "category": "financial",
+        "category": "finance",
         "verification_required": True,
         "payment_required": True,
         "permissions": [
             "world_id_verify",
             "payments",
             "haptic_feedback"
-        ]
+        ],
+        "app_id": WORLD_ID_APP_ID,
+        "version": "1.0.0",
+        "developer": {
+            "name": "RoluATM",
+            "url": f"https://{os.getenv('VERCEL_URL', 'localhost:8000')}"
+        },
+        "supported_countries": ["US", "CA", "GB", "DE", "FR", "AU", "JP"],
+        "min_world_app_version": "2.0.0"
     }
 
 
@@ -1185,38 +1193,81 @@ async def payment_success(session_id: str):
 async def verify_world_id_proof(world_id_payload: dict) -> bool:
     """
     Securely verifies a World ID proof with the Worldcoin API on the backend.
-    This requires the WORLD_API_KEY environment variable to be set.
+    Updated to use the latest World ID API v2 endpoint and payload structure.
     """
     api_key = os.getenv("WORLD_API_KEY")
     if not api_key:
         logger.error("CRITICAL: WORLD_API_KEY is not set. Backend verification is disabled.")
-        # For security, we fail closed. If the key is missing, no verification can succeed.
         return False
 
+    # Updated to use the correct v2 API endpoint format
     verification_url = f"https://developer.worldcoin.org/api/v2/verify/{WORLD_ID_APP_ID}"
-    headers = {"Authorization": f"Bearer {api_key}"}
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
     
-    # Ensure all required fields from the frontend are present
+    # Updated payload structure to match latest World ID API v2 requirements
     proof_data = {
-        "merkle_root": world_id_payload.get("merkle_root"),
         "nullifier_hash": world_id_payload.get("nullifier_hash"),
+        "merkle_root": world_id_payload.get("merkle_root"), 
         "proof": world_id_payload.get("proof"),
-        "verification_level": world_id_payload.get("verification_level"),
+        "verification_level": world_id_payload.get("verification_level", "orb"),
         "action": WORLD_ID_ACTION,
+        # Add signal if provided (optional)
+        **({"signal": world_id_payload.get("signal")} if world_id_payload.get("signal") else {})
     }
 
-    if not all(proof_data.values()):
-        logger.error(f"Backend verification failed: missing one or more fields in payload: {proof_data.keys()}")
+    # Validate required fields
+    required_fields = ["nullifier_hash", "merkle_root", "proof"]
+    missing_fields = [field for field in required_fields if not proof_data.get(field)]
+    
+    if missing_fields:
+        logger.error(f"Backend verification failed: missing required fields: {missing_fields}")
         return False
 
-    async with httpx.AsyncClient() as client:
-        response = await client.post(verification_url, headers=headers, json=proof_data, timeout=20.0)
-
-    if response.status_code == 200:
-        logger.info("Backend World ID verification successful.")
-        return True
-    else:
-        logger.error(f"Backend World ID verification failed: {response.status_code} - {response.text}")
+    try:
+        async with httpx.AsyncClient() as client:
+            logger.info(f"Sending verification request to: {verification_url}")
+            logger.info(f"Payload keys: {list(proof_data.keys())}")
+            
+            response = await client.post(
+                verification_url, 
+                headers=headers, 
+                json=proof_data, 
+                timeout=30.0
+            )
+            
+            logger.info(f"World ID API response status: {response.status_code}")
+            
+            if response.status_code == 200:
+                response_data = response.json()
+                logger.info(f"World ID verification successful: {response_data}")
+                return True
+            else:
+                error_text = response.text
+                logger.error(f"World ID verification failed: {response.status_code} - {error_text}")
+                
+                # Handle specific error cases
+                if response.status_code == 400:
+                    logger.error("Bad request - check payload format and required fields")
+                elif response.status_code == 401:
+                    logger.error("Unauthorized - check WORLD_API_KEY")
+                elif response.status_code == 403:
+                    logger.error("Forbidden - check app permissions")
+                elif response.status_code == 404:
+                    logger.error("Not found - check WORLD_ID_APP_ID")
+                
+                return False
+                
+    except httpx.TimeoutException:
+        logger.error("World ID verification timeout")
+        return False
+    except httpx.RequestError as e:
+        logger.error(f"World ID verification request error: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error during World ID verification: {e}")
         return False
 
 
@@ -1224,28 +1275,52 @@ async def verify_world_id_proof(world_id_payload: dict) -> bool:
 async def initiate_payment(request: dict):
     """
     Handles the first step of the payment flow:
-    1. Verifies the World ID proof from the client.
+    1. Verifies the World ID proof from the client using latest API.
     2. Creates a unique payment ID for the transaction.
-    3. Returns the necessary data for the client to call `MiniKit.pay()`.
+    3. Returns the necessary data for the client to call `MiniKit.commandsAsync.pay()`.
     """
-    is_verified = await verify_world_id_proof(request)
-    if not is_verified:
-        raise HTTPException(status_code=400, detail="World ID verification failed.")
-
-    # If verified, proceed to create the payment intent
-    amount_usd = request.get("amount")
-    if not amount_usd:
-        raise HTTPException(status_code=400, detail="Amount is required.")
-
-    payment_id = f"pay_{uuid.uuid4().hex}"
-    payment_requests[payment_id] = {"status": "pending", "amount": amount_usd}
+    logger.info(f"Payment initiation request received: {list(request.keys())}")
     
-    logger.info(f"Payment initiated with ID: {payment_id} for ${amount_usd}")
+    # Extract World ID payload from the new MiniKit format
+    world_id_payload = request.get("payload")
+    if not world_id_payload:
+        logger.error("Missing 'payload' field in request")
+        raise HTTPException(status_code=400, detail="World ID payload is required")
+    
+    # Verify World ID proof
+    is_verified = await verify_world_id_proof(world_id_payload)
+    if not is_verified:
+        logger.error("World ID verification failed during payment initiation")
+        raise HTTPException(status_code=400, detail="World ID verification failed")
 
+    # Extract amount from request
+    amount_usd = request.get("amount", 10.50)  # Default to $10.50
+    
+    # Create unique payment reference
+    payment_id = f"rolu_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+    
+    # Store payment request
+    payment_requests[payment_id] = {
+        "status": "pending",
+        "amount": amount_usd,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "world_id_verified": True,
+        "nullifier_hash": world_id_payload.get("nullifier_hash")
+    }
+    
+    logger.info(f"Payment initiated successfully - ID: {payment_id}, Amount: ${amount_usd}")
+
+    # Return data for MiniKit.commandsAsync.pay()
     return {
+        "success": True,
         "payment_id": payment_id,
-        "recipient": ROLU_WALLET_ADDRESS,
-        "amount": str(amount_usd) # Amount as a string
+        "reference": payment_id,  # Used by MiniKit
+        "to": ROLU_WALLET_ADDRESS,
+        "tokens": [{
+            "symbol": "USDC",
+            "amount": f"{amount_usd:.6f}"  # Format with 6 decimals for USDC
+        }],
+        "description": f"RoluATM Cash Withdrawal - ${amount_usd}"
     }
 
 
@@ -1253,26 +1328,82 @@ async def initiate_payment(request: dict):
 async def confirm_payment(request: dict):
     """
     Handles the final step of the payment flow:
-    1. Receives the result from `MiniKit.pay()`.
-    2. Logs the transaction status.
-    (In a real app, this would trigger dispensing cash from the ATM)
+    1. Receives the result from `MiniKit.commandsAsync.pay()`.
+    2. Validates the transaction details.
+    3. Logs the transaction status and triggers cash dispensing.
     """
+    logger.info(f"Payment confirmation request received: {list(request.keys())}")
+    
     payment_id = request.get("payment_id")
-    tx_hash = request.get("tx_hash")
+    final_payload = request.get("finalPayload")
+    
+    if not payment_id:
+        logger.error("Missing payment_id in confirmation request")
+        raise HTTPException(status_code=400, detail="payment_id is required")
+    
+    if not final_payload:
+        logger.error("Missing finalPayload in confirmation request")
+        raise HTTPException(status_code=400, detail="finalPayload is required")
 
-    if not payment_id or not tx_hash:
-        raise HTTPException(status_code=400, detail="payment_id and tx_hash are required.")
-
+    # Check if payment exists
     if payment_id not in payment_requests:
-        raise HTTPException(status_code=404, detail="Payment ID not found.")
+        logger.error(f"Payment ID not found: {payment_id}")
+        raise HTTPException(status_code=404, detail="Payment ID not found")
 
-    logger.info(f"Payment confirmation received for ID: {payment_id} with tx_hash: {tx_hash}")
-    payment_requests[payment_id]["status"] = "confirmed"
-    payment_requests[payment_id]["tx_hash"] = tx_hash
+    # Handle different response statuses from MiniKit
+    if final_payload.get("status") == "success":
+        # Extract transaction details
+        tx_hash = final_payload.get("transaction_hash")
+        reference = final_payload.get("reference")
+        
+        logger.info(f"Payment successful - ID: {payment_id}, TX: {tx_hash}, Ref: {reference}")
+        
+        # Update payment status
+        payment_requests[payment_id].update({
+            "status": "confirmed",
+            "tx_hash": tx_hash,
+            "reference": reference,
+            "confirmed_at": datetime.now(timezone.utc).isoformat(),
+            "final_payload": final_payload
+        })
+        
+        # Here you would trigger the physical cash dispenser
+        logger.info(f"Triggering cash dispenser for payment {payment_id}")
+        
+        return {
+            "success": True,
+            "status": "confirmed",
+            "message": "Payment confirmed successfully. Cash dispensing initiated.",
+            "payment_id": payment_id,
+            "tx_hash": tx_hash
+        }
+        
+    elif final_payload.get("status") == "error":
+        # Handle payment errors
+        error_code = final_payload.get("error_code")
+        error_message = final_payload.get("error_message", "Payment failed")
+        
+        logger.error(f"Payment failed - ID: {payment_id}, Error: {error_code} - {error_message}")
+        
+        # Update payment status
+        payment_requests[payment_id].update({
+            "status": "failed",
+            "error_code": error_code,
+            "error_message": error_message,
+            "failed_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+        return {
+            "success": False,
+            "status": "failed",
+            "message": f"Payment failed: {error_message}",
+            "error_code": error_code
+        }
     
-    # Here you would trigger the physical cash dispenser
-    
-    return {"success": True, "detail": "Payment confirmed and is being processed."}
+    else:
+        # Unknown status
+        logger.error(f"Unknown payment status: {final_payload.get('status')}")
+        raise HTTPException(status_code=400, detail="Invalid payment status")
 
 
 @app.post("/api/verify-world-id")

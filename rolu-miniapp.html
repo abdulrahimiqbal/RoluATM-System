@@ -134,8 +134,19 @@
             font-size: 12px;
             color: #95a5a6;
         }
+
+        .debug-info {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@1.9.6/+esm" type="module"></script>
 </head>
 <body>
     <div class="container">
@@ -154,6 +165,8 @@
         <button id="withdraw-btn" class="action-button">
             Withdraw $10.50
         </button>
+
+        <div id="debug-info" class="debug-info" style="display: none;"></div>
         
         <div class="footer">
             Powered by World ID • Secure • Private
@@ -161,175 +174,32 @@
     </div>
 
     <script type="module">
-        import { MiniKit } from 'https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@1.9.6/+esm';
+        // Import MiniKit from CDN
+        import { MiniKit, VerificationLevel } from 'https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@latest/+esm';
         
-        // Application state
-        let appState = {
-            sessionId: new URLSearchParams(window.location.search).get('session') || 'demo-session-' + Date.now(),
+        // Application configuration
+        const APP_CONFIG = {
+            appId: 'app_263013ca6f702add37ad338fa43d4307',
+            action: 'withdraw-cash',
+            walletAddress: '0x742fd484b63E7C9b7f34FAb65A8c165B7cd5C5e8',
+            sessionId: new URLSearchParams(window.location.search).get('session') || 'demo-session-' + Date.now()
         };
         
         // DOM elements
         const elements = {
             withdrawBtn: document.getElementById('withdraw-btn'),
             statusMessage: document.getElementById('status-message'),
+            debugInfo: document.getElementById('debug-info')
         };
         
-        // Wait for MiniKit to be available
-        async function waitForMiniKit() {
-            let attempts = 0;
-            const maxAttempts = 50;
-            
-            while (attempts < maxAttempts) {
-                if (typeof MiniKit !== 'undefined' && MiniKit.commandsAsync) {
-                    console.log('MiniKit is available');
-                    return true;
-                }
-                await new Promise(resolve => setTimeout(resolve, 100));
-                attempts++;
-            }
-            return false;
-        }
-        
-        // Initialize app
-        window.addEventListener('load', async () => {
-            console.log('RoluATM Mini App initializing...');
-            console.log('Session ID:', appState.sessionId);
-            
-            // Wait for MiniKit to be available
-            const miniKitAvailable = await waitForMiniKit();
-            
-            if (!miniKitAvailable) {
-                console.error('MiniKit not available');
-                showStatus('Please open this page in World App', 'error');
-                elements.withdrawBtn.disabled = true;
-                return;
-            }
-            
-            try {
-                // Install MiniKit
-                const installResult = await MiniKit.install('app_263013ca6f702add37ad338fa43d4307');
-                console.log('MiniKit install result:', installResult);
-                
-                // Handle "already_installed" as success
-                if (installResult.success || installResult.error === 'already_installed') {
-                    console.log('MiniKit installed successfully');
-                    
-                    // Check available commands
-                    console.log('Available MiniKit commands:', Object.keys(MiniKit.commandsAsync || {}));
-                    
-                    // Set up event listeners
-                    elements.withdrawBtn.addEventListener('click', handleWithdraw);
-                    
-                    showStatus('Ready for withdrawal', 'success');
-                } else {
-                    throw new Error('Failed to install MiniKit: ' + (installResult.error || 'Unknown error'));
-                }
-                
-            } catch (error) {
-                console.error('MiniKit initialization failed:', error);
-                showStatus('Failed to initialize. Please try again.', 'error');
-                elements.withdrawBtn.disabled = true;
-            }
-        });
-
-        async function handleWithdraw() {
-            try {
-                // Check if verify command is available
-                if (!MiniKit.commandsAsync || !MiniKit.commandsAsync.verify) {
-                    throw new Error('Verify command is not available. Please update your World App.');
-                }
-                
-                // Step 1: World ID Verification
-                showStatus('Verifying your World ID...', 'warning');
-                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Verifying...';
-                elements.withdrawBtn.disabled = true;
-
-                const verifyPayload = {
-                    action: 'withdraw-cash',
-                    signal: appState.sessionId,
-                    verification_level: 'orb'
-                };
-
-                console.log('Calling MiniKit.commandsAsync.verify with payload:', verifyPayload);
-                const { finalPayload } = await MiniKit.commandsAsync.verify(verifyPayload);
-
-                if (finalPayload.status === 'error') {
-                    throw new Error(finalPayload.error || 'World ID Verification failed');
-                }
-
-                console.log('World ID verification successful:', finalPayload);
-                showStatus('World ID verified. Authorizing payment...', 'warning');
-
-                // Step 2: Payment Authorization
-                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Processing Payment...';
-                
-                const paymentPayload = {
-                    to: '0x742fd484b63E7C9b7f34FAb65A8c165B7cd5C5e8', // RoluATM wallet address
-                    value: 10.50, // $10.50 (withdrawal + fee)
-                    token: 'USDC',
-                    description: 'RoluATM Cash Withdrawal',
-                    reference: appState.sessionId
-                };
-
-                console.log('Calling MiniKit.commandsAsync.pay with payload:', paymentPayload);
-                const paymentResult = await MiniKit.commandsAsync.pay(paymentPayload);
-
-                if (paymentResult.finalPayload.status === 'error') {
-                    throw new Error(paymentResult.finalPayload.error || 'Payment failed');
-                }
-
-                console.log('Payment authorized:', paymentResult);
-                showStatus('Payment authorized! Dispensing cash...', 'success');
-                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Dispensing...';
-
-                // Step 3: Signal Cash Dispenser
-                await signalCashDispense(finalPayload);
-
-            } catch (error) {
-                console.error('Withdrawal process failed:', error);
-                showStatus('Error: ' + error.message, 'error');
-                elements.withdrawBtn.innerHTML = 'Retry Withdrawal';
-                elements.withdrawBtn.disabled = false;
-            }
-        }
-        
-        // Signal Cash Dispenser
-        async function signalCashDispense(verificationPayload) {
-            try {
-                // Send signal to your backend to activate the TFlex dispenser
-                const response = await fetch(`https://rolu-atm-system.vercel.app/confirm-withdrawal`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        kiosk_id: 'demo-kiosk-001',
-                        session_id: appState.sessionId,
-                        coins_dispensed: 40, // 40 quarters = $10
-                        timestamp: new Date().toISOString(),
-                        verification: verificationPayload // Include verification proof
-                    })
-                });
-                
-                if (response.ok) {
-                    showStatus('Cash dispensed successfully! Thank you!', 'success');
-                    elements.withdrawBtn.innerHTML = '✅ Transaction Complete';
-                    
-                    // Send haptic feedback
-                    try {
-                        await MiniKit.commandsAsync.sendHapticFeedback({ type: 'success' });
-                    } catch (hapticError) {
-                        console.log('Haptic feedback not available:', hapticError);
-                    }
-                    
-                } else {
-                    throw new Error('Dispenser communication failed');
-                }
-                
-            } catch (error) {
-                console.error('Cash dispense failed:', error);
-                showStatus('Dispenser error. Please contact support.', 'error');
-            }
+        // Debug logging
+        function debugLog(message, data = null) {
+            console.log(message, data);
+            const debugDiv = elements.debugInfo;
+            const timestamp = new Date().toLocaleTimeString();
+            debugDiv.innerHTML += `[${timestamp}] ${message}${data ? ': ' + JSON.stringify(data, null, 2) : ''}\n`;
+            debugDiv.scrollTop = debugDiv.scrollHeight;
+            debugDiv.style.display = 'block';
         }
         
         // UI Helper Functions
@@ -337,7 +207,227 @@
             elements.statusMessage.textContent = message;
             elements.statusMessage.className = `status-message status-${type}`;
             elements.statusMessage.style.display = 'block';
+            debugLog(`Status: ${type.toUpperCase()} - ${message}`);
         }
+
+        function setButtonState(text, disabled = false) {
+            elements.withdrawBtn.innerHTML = text;
+            elements.withdrawBtn.disabled = disabled;
+        }
+        
+        // Initialize MiniKit following official documentation pattern
+        async function initializeMiniKit() {
+            debugLog('Starting MiniKit initialization...');
+            
+            try {
+                // Step 1: Check if MiniKit is installed (required by docs)
+                if (!MiniKit.isInstalled()) {
+                    debugLog('MiniKit not installed, attempting installation...');
+                    
+                    // Install MiniKit with app ID
+                    const installResult = await MiniKit.install(APP_CONFIG.appId);
+                    debugLog('Install result', installResult);
+                    
+                    if (!installResult.success && installResult.error !== 'already_installed') {
+                        throw new Error(`Installation failed: ${installResult.error}`);
+                    }
+                }
+                
+                debugLog('MiniKit installation confirmed');
+                
+                // Step 2: Log MiniKit information for debugging
+                debugLog('MiniKit Version Info', {
+                    MINIKIT_VERSION: MiniKit.MINIKIT_VERSION,
+                    MINIKIT_MINOR_VERSION: MiniKit.MINIKIT_MINOR_VERSION,
+                    miniKitCommandVersion: MiniKit.miniKitCommandVersion,
+                    isReady: MiniKit.isReady,
+                    deviceProperties: MiniKit.deviceProperties
+                });
+                
+                // Step 3: Check command availability
+                const availableCommands = Object.keys(MiniKit.commandsAsync || {});
+                debugLog('Available commands', availableCommands);
+                
+                if (!MiniKit.commandsAsync || !MiniKit.commandsAsync.verify) {
+                    throw new Error('Verify command not available in this World App version');
+                }
+                
+                if (!MiniKit.commandsAsync.pay) {
+                    throw new Error('Pay command not available in this World App version');
+                }
+                
+                // Step 4: Test command availability using isCommandAvailable if available
+                if (typeof MiniKit.isCommandAvailable === 'function') {
+                    const verifyAvailable = MiniKit.isCommandAvailable('verify');
+                    const payAvailable = MiniKit.isCommandAvailable('pay');
+                    
+                    debugLog('Command availability check', {
+                        verify: verifyAvailable,
+                        pay: payAvailable
+                    });
+                    
+                    if (!verifyAvailable) {
+                        throw new Error('Verify command not supported by your World App version');
+                    }
+                    
+                    if (!payAvailable) {
+                        throw new Error('Pay command not supported by your World App version');
+                    }
+                }
+                
+                debugLog('MiniKit initialization successful');
+                showStatus('Ready for withdrawal', 'success');
+                setButtonState('Withdraw $10.50', false);
+                
+                // Set up event listener
+                elements.withdrawBtn.addEventListener('click', handleWithdraw);
+                
+                return true;
+                
+            } catch (error) {
+                debugLog('MiniKit initialization failed', error);
+                showStatus(`Initialization failed: ${error.message}`, 'error');
+                setButtonState('Initialization Failed', true);
+                return false;
+            }
+        }
+
+        // Handle withdrawal process following official documentation
+        async function handleWithdraw() {
+            try {
+                debugLog('Starting withdrawal process...');
+                setButtonState('<span class="spinner"></span>Verifying World ID...', true);
+                showStatus('Verifying your World ID...', 'warning');
+
+                // Step 1: World ID Verification (following official docs pattern)
+                const verifyPayload = {
+                    action: APP_CONFIG.action,
+                    signal: APP_CONFIG.sessionId,
+                    verification_level: VerificationLevel.Orb
+                };
+
+                debugLog('Calling verify with payload', verifyPayload);
+                
+                const verifyResult = await MiniKit.commandsAsync.verify(verifyPayload);
+                debugLog('Verify result', verifyResult);
+
+                if (!verifyResult || !verifyResult.finalPayload) {
+                    throw new Error('Invalid verify response structure');
+                }
+
+                const { finalPayload } = verifyResult;
+
+                if (finalPayload.status === 'error') {
+                    throw new Error(finalPayload.error || 'World ID verification failed');
+                }
+
+                debugLog('World ID verification successful', finalPayload);
+                showStatus('World ID verified! Processing payment...', 'warning');
+                setButtonState('<span class="spinner"></span>Processing Payment...', true);
+
+                // Step 2: Payment Authorization (following official docs pattern)
+                const paymentPayload = {
+                    to: APP_CONFIG.walletAddress,
+                    value: 10.50,
+                    token: 'USDC',
+                    description: 'RoluATM Cash Withdrawal',
+                    reference: APP_CONFIG.sessionId
+                };
+
+                debugLog('Calling pay with payload', paymentPayload);
+                
+                const paymentResult = await MiniKit.commandsAsync.pay(paymentPayload);
+                debugLog('Payment result', paymentResult);
+
+                if (!paymentResult || !paymentResult.finalPayload) {
+                    throw new Error('Invalid payment response structure');
+                }
+
+                if (paymentResult.finalPayload.status === 'error') {
+                    throw new Error(paymentResult.finalPayload.error || 'Payment authorization failed');
+                }
+
+                debugLog('Payment authorized successfully', paymentResult);
+                showStatus('Payment authorized! Dispensing cash...', 'success');
+                setButtonState('<span class="spinner"></span>Dispensing Cash...', true);
+
+                // Step 3: Signal Cash Dispenser
+                await signalCashDispense(finalPayload, paymentResult.finalPayload);
+
+            } catch (error) {
+                debugLog('Withdrawal failed', error);
+                showStatus(`Error: ${error.message}`, 'error');
+                setButtonState('Retry Withdrawal', false);
+            }
+        }
+        
+        // Signal Cash Dispenser
+        async function signalCashDispense(verificationPayload, paymentPayload) {
+            try {
+                debugLog('Signaling cash dispenser...');
+                
+                const response = await fetch(`https://rolu-atm-system.vercel.app/confirm-withdrawal`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        kiosk_id: 'demo-kiosk-001',
+                        session_id: APP_CONFIG.sessionId,
+                        coins_dispensed: 40, // 40 quarters = $10
+                        timestamp: new Date().toISOString(),
+                        verification: verificationPayload,
+                        payment: paymentPayload
+                    })
+                });
+                
+                debugLog('Dispenser response status', response.status);
+                
+                if (response.ok) {
+                    showStatus('Cash dispensed successfully! Thank you!', 'success');
+                    setButtonState('✅ Transaction Complete', true);
+                    
+                    // Send haptic feedback if available
+                    try {
+                        if (MiniKit.commandsAsync.sendHapticFeedback) {
+                            await MiniKit.commandsAsync.sendHapticFeedback({ type: 'success' });
+                            debugLog('Haptic feedback sent');
+                        }
+                    } catch (hapticError) {
+                        debugLog('Haptic feedback not available', hapticError);
+                    }
+                    
+                } else {
+                    const errorText = await response.text();
+                    throw new Error(`Dispenser communication failed: ${errorText}`);
+                }
+                
+            } catch (error) {
+                debugLog('Cash dispense failed', error);
+                showStatus('Dispenser error. Please contact support.', 'error');
+                setButtonState('Dispenser Error', true);
+            }
+        }
+        
+        // Initialize when page loads
+        window.addEventListener('load', async () => {
+            debugLog('Page loaded, starting initialization...');
+            showStatus('Initializing...', 'warning');
+            setButtonState('Initializing...', true);
+            
+            // Check if we're in World App
+            const userAgent = navigator.userAgent;
+            debugLog('User Agent', userAgent);
+            
+            if (!userAgent.includes('WorldApp')) {
+                showStatus('Please open this page in World App', 'error');
+                setButtonState('Open in World App', true);
+                return;
+            }
+            
+            // Initialize MiniKit
+            await initializeMiniKit();
+        });
     </script>
 </body>
 </html> 
