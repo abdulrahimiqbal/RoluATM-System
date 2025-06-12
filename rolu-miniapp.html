@@ -173,140 +173,166 @@
         </div>
     </div>
 
-    <!-- Load MiniKit library globally first -->
-    <script src="https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@latest/dist/index.global.js"></script>
-
     <script>
-        // --- Main Initialization ---
-        function initializeRoluApp() {
-            // Now that MiniKit is loaded, we can safely destructure it
-            const { MiniKit, VerificationLevel } = window.MiniKit;
+        // Check if we're in World App environment
+        const isInWorldApp = typeof window !== 'undefined' && 
+                           (window.location.href.includes('worldapp://') || 
+                            window.navigator.userAgent.includes('WorldApp') ||
+                            window.WorldApp);
 
-            // Application configuration
-            const APP_CONFIG = {
-                appId: 'app_263013ca6f702add37ad338fa43d4307',
-                action: 'withdraw-cash',
-                walletAddress: '0x742fd484b63E7C9b7f34FAb65A8c165B7cd5C5e8',
-                sessionId: new URLSearchParams(window.location.search).get('session') || 'demo-session-' + Date.now()
-            };
-            
-            // DOM elements
-            const elements = {
-                withdrawBtn: document.getElementById('withdraw-btn'),
-                statusMessage: document.getElementById('status-message'),
-            };
-            
-            // UI Helper Functions
-            function showStatus(message, type) {
-                elements.statusMessage.textContent = message;
-                elements.statusMessage.className = `status-message status-${type}`;
-                elements.statusMessage.style.display = 'block';
-                console.log(`Status: ${type.toUpperCase()} - ${message}`);
-            }
+        console.log('Environment check:', {
+            isInWorldApp,
+            userAgent: navigator.userAgent,
+            location: window.location.href,
+            hasWorldApp: !!window.WorldApp
+        });
 
-            function setButtonState(text, disabled = false) {
-                elements.withdrawBtn.innerHTML = text;
-                elements.withdrawBtn.disabled = disabled;
-            }
-
-            async function handleWithdraw() {
-                try {
-                    showStatus('Starting World ID verification...', 'info');
-                    setButtonState('<span class="spinner"></span>Verifying...', true);
-
-                    const { finalPayload: verifyFinalPayload } = await MiniKit.commandsAsync.verify({
-                        action: APP_CONFIG.action,
-                        signal: APP_CONFIG.sessionId,
-                        verification_level: VerificationLevel.Orb
-                    });
-
-                    if (verifyFinalPayload.status === 'error') {
-                        throw new Error(verifyFinalPayload.error_message || 'World ID verification was rejected or failed.');
-                    }
-                    
-                    showStatus('✅ World ID verified! Preparing payment...', 'success');
-
-                    const initiateResponse = await fetch('/api/initiate-payment', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            payload: verifyFinalPayload,
-                            amount: 10.50
-                        })
-                    });
-
-                    const paymentData = await initiateResponse.json();
-                    if (!initiateResponse.ok || !paymentData.success) {
-                        throw new Error(paymentData.detail || 'Failed to initiate payment on the server.');
-                    }
-                    
-                    showStatus('Please confirm the payment in World App...', 'info');
-
-                    const { finalPayload: payFinalPayload } = await MiniKit.commandsAsync.pay({
-                        reference: paymentData.reference,
-                        to: paymentData.to,
-                        tokens: paymentData.tokens,
-                        description: paymentData.description
-                    });
-                    
-                    const confirmResponse = await fetch('/api/confirm-payment', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            payment_id: paymentData.payment_id,
-                            finalPayload: payFinalPayload
-                        })
-                    });
-
-                    const confirmData = await confirmResponse.json();
-                    if (!confirmResponse.ok || !confirmData.success) {
-                        throw new Error(confirmData.message || 'Payment confirmation failed on the server.');
-                    }
-
-                    showStatus(`✅ Payment successful! Tx: ${confirmData.tx_hash.substring(0, 10)}...`, 'success');
-                    setButtonState('Done!', true);
-
-                } catch (error) {
-                    console.error('Withdrawal Error:', error);
-                    showStatus(`❌ Error: ${error.message}`, 'error');
-                    setButtonState('Try Again', false);
-                }
-            }
-            
-            try {
-                console.log("MiniKit Loaded. Installing...");
-                MiniKit.install(APP_CONFIG.appId, {
-                    verification_level: VerificationLevel.Orb
-                });
-                console.log("MiniKit Installed. Ready for withdrawal.");
-                setButtonState('Withdraw $10.50', false);
-                showStatus('Ready to withdraw. Please verify with World ID.', 'info');
-                elements.withdrawBtn.addEventListener('click', handleWithdraw);
-            } catch (error) {
-                console.error("MiniKit Initialization Error:", error);
-                showStatus(`❌ Setup Failed: ${error.message}`, 'error');
-                setButtonState('Setup Failed', true);
-            }
+        if (!isInWorldApp) {
+            document.getElementById('status-message').textContent = '❌ Please open this page in the World App';
+            document.getElementById('status-message').className = 'status-message status-error';
+            document.getElementById('status-message').style.display = 'block';
+            document.getElementById('withdraw-btn').disabled = true;
+            throw new Error('Not in World App environment');
         }
 
-        // --- Polling for MiniKit ---
-        const maxAttempts = 100; // 10 seconds
-        let attempts = 0;
-        const intervalId = setInterval(() => {
-            if (window.MiniKit) {
-                clearInterval(intervalId);
-                console.log(`MiniKit found after ${attempts + 1} attempts.`);
-                initializeRoluApp();
-            } else if (attempts >= maxAttempts) {
-                clearInterval(intervalId);
-                console.error('MiniKit failed to load after 10 seconds.');
-                document.getElementById('status-message').textContent = '❌ Critical Error: Could not connect to World App. Please refresh.';
-                document.getElementById('status-message').className = 'status-message status-error';
-                document.getElementById('status-message').style.display = 'block';
-                document.getElementById('withdraw-btn').disabled = true;
+        // Application configuration
+        const APP_CONFIG = {
+            appId: 'app_263013ca6f702add37ad338fa43d4307',
+            action: 'withdraw-cash',
+            walletAddress: '0x742fd484b63E7C9b7f34FAb65A8c165B7cd5C5e8',
+            sessionId: new URLSearchParams(window.location.search).get('session') || 'demo-session-' + Date.now()
+        };
+        
+        // DOM elements
+        const elements = {
+            withdrawBtn: document.getElementById('withdraw-btn'),
+            statusMessage: document.getElementById('status-message'),
+        };
+        
+        // UI Helper Functions
+        function showStatus(message, type) {
+            elements.statusMessage.textContent = message;
+            elements.statusMessage.className = `status-message status-${type}`;
+            elements.statusMessage.style.display = 'block';
+            console.log(`Status: ${type.toUpperCase()} - ${message}`);
+        }
+
+        function setButtonState(text, disabled = false) {
+            elements.withdrawBtn.innerHTML = text;
+            elements.withdrawBtn.disabled = disabled;
+        }
+
+        async function handleWithdraw() {
+            try {
+                showStatus('Starting World ID verification...', 'info');
+                setButtonState('<span class="spinner"></span>Verifying...', true);
+
+                // Use the global MiniKit from World App
+                const { finalPayload: verifyFinalPayload } = await window.MiniKit.commandsAsync.verify({
+                    action: APP_CONFIG.action,
+                    signal: APP_CONFIG.sessionId,
+                    verification_level: 'orb'
+                });
+
+                if (verifyFinalPayload.status === 'error') {
+                    throw new Error(verifyFinalPayload.error_message || 'World ID verification was rejected or failed.');
+                }
+                
+                showStatus('✅ World ID verified! Preparing payment...', 'success');
+
+                const initiateResponse = await fetch('/api/initiate-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        payload: verifyFinalPayload,
+                        amount: 10.50
+                    })
+                });
+
+                const paymentData = await initiateResponse.json();
+                if (!initiateResponse.ok || !paymentData.success) {
+                    throw new Error(paymentData.detail || 'Failed to initiate payment on the server.');
+                }
+                
+                showStatus('Please confirm the payment in World App...', 'info');
+
+                const { finalPayload: payFinalPayload } = await window.MiniKit.commandsAsync.pay({
+                    reference: paymentData.reference,
+                    to: paymentData.to,
+                    tokens: paymentData.tokens,
+                    description: paymentData.description
+                });
+                
+                const confirmResponse = await fetch('/api/confirm-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        payment_id: paymentData.payment_id,
+                        finalPayload: payFinalPayload
+                    })
+                });
+
+                const confirmData = await confirmResponse.json();
+                if (!confirmResponse.ok || !confirmData.success) {
+                    throw new Error(confirmData.message || 'Payment confirmation failed on the server.');
+                }
+
+                showStatus(`✅ Payment successful! Tx: ${confirmData.tx_hash.substring(0, 10)}...`, 'success');
+                setButtonState('Done!', true);
+
+            } catch (error) {
+                console.error('Withdrawal Error:', error);
+                showStatus(`❌ Error: ${error.message}`, 'error');
+                setButtonState('Try Again', false);
             }
-            attempts++;
-        }, 100);
+        }
+        
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('RoluATM initializing...');
+            
+            // Wait for MiniKit to be available in World App
+            let attempts = 0;
+            const maxAttempts = 50;
+            
+            const waitForMiniKit = () => {
+                if (window.MiniKit && window.MiniKit.commandsAsync) {
+                    console.log('MiniKit found in World App environment');
+                    
+                    try {
+                        // Install the app
+                        window.MiniKit.install(APP_CONFIG.appId);
+                        console.log('MiniKit installed successfully');
+                        
+                        setButtonState('Withdraw $10.50', false);
+                        showStatus('Ready to withdraw. Click to verify with World ID.', 'info');
+                        elements.withdrawBtn.addEventListener('click', handleWithdraw);
+                        
+                    } catch (error) {
+                        console.error('MiniKit installation error:', error);
+                        if (error.message.includes('already_installed')) {
+                            console.log('App already installed, proceeding...');
+                            setButtonState('Withdraw $10.50', false);
+                            showStatus('Ready to withdraw. Click to verify with World ID.', 'info');
+                            elements.withdrawBtn.addEventListener('click', handleWithdraw);
+                        } else {
+                            showStatus(`❌ Setup Failed: ${error.message}`, 'error');
+                            setButtonState('Setup Failed', true);
+                        }
+                    }
+                } else if (attempts < maxAttempts) {
+                    attempts++;
+                    console.log(`Waiting for MiniKit... attempt ${attempts}`);
+                    setTimeout(waitForMiniKit, 100);
+                } else {
+                    console.error('MiniKit not found after maximum attempts');
+                    showStatus('❌ Could not connect to World App. Please refresh.', 'error');
+                    setButtonState('Connection Failed', true);
+                }
+            };
+            
+            waitForMiniKit();
+        });
     </script>
 </body>
 </html> 
