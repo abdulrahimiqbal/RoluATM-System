@@ -532,9 +532,15 @@ async def root():
     }
 
 
-# For Vercel deployment - use Mangum adapter
-from mangum import Mangum
-handler = Mangum(app, lifespan="off")
+@app.get("/test")
+async def test_endpoint():
+    """Simple test endpoint for deployment verification"""
+    return {
+        "message": "Hello from RoluATM Cloud API!",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "status": "success"
+    }
+
 
 # For local development
 if __name__ == "__main__":
