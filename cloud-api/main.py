@@ -743,14 +743,42 @@ async def root():
             showStatus('Ready to withdraw cash', 'success');
         }}
 
+        function initMiniKit() {{
+            if (typeof MiniKit !== 'undefined') {{
+                try {{
+                    MiniKit.install();
+                    MiniKit.init({{ app_id: '{WORLD_ID_APP_ID}' }});
+                    console.log('MiniKit initialized successfully');
+                    initializeApp(); // Initialize the main app now that MiniKit is ready
+                    return true;
+                }} catch (e) {{
+                    showStatus('Error: Could not initialize World App.', 'error');
+                    console.error("MiniKit initialization failed:", e);
+                    return false;
+                }}
+            }}
+            return false; // MiniKit script not loaded yet
+        }}
+
         window.addEventListener('load', () => {{
             showStatus('Initializing...', 'info');
-            try {{
-                MiniKit.install();
-                MiniKit.init({{ app_id: '{WORLD_ID_APP_ID}' }});
-                initializeApp();
-            }} catch (e) {{
-                showStatus('Error: Could not load World App components.', 'error');
+            
+            // Try to init immediately. If it fails, start polling.
+            if (!initMiniKit()) {{
+                let attempts = 0;
+                const maxAttempts = 30; // 3 seconds
+                const interval = setInterval(() => {{
+                    attempts++;
+                    if (initMiniKit()) {{
+                        // Successfully initialized
+                        clearInterval(interval);
+                    }} else if (attempts >= maxAttempts) {{
+                        // Failed to initialize after timeout
+                        clearInterval(interval);
+                        showStatus('Error: Could not load World App components. Please restart the app.', 'error');
+                        console.error('MiniKit failed to load after timeout.');
+                    }}
+                }}, 100);
             }}
         }});
     </script>
