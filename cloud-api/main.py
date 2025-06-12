@@ -435,9 +435,10 @@ async def root():
 async def test_endpoint():
     """Simple test endpoint for deployment verification"""
     return {
-        "message": "Hello from RoluATM Cloud API!",
+        "message": "Hello from RoluATM Cloud API with embedded models!",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "status": "success"
+        "status": "success",
+        "models_embedded": True
     }
 
 
