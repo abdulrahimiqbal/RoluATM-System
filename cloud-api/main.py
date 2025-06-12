@@ -532,8 +532,10 @@ async def root():
     }
 
 
-# For Vercel deployment - export the handler
-handler = app
+# For Vercel deployment - create ASGI handler function
+async def handler(scope, receive, send):
+    """ASGI handler for Vercel"""
+    await app(scope, receive, send)
 
 # For local development
 if __name__ == "__main__":
