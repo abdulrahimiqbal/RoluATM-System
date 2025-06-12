@@ -691,9 +691,36 @@ async def root():
         }
     </style>
     <script src="https://minikit.world.org/v1/minikit.js"></script>
-    <script>MiniKit.install();</script>
-    <!-- Optional mobile console: add ?debug to URL -->
     <script>
+      // Load MiniKit properly with async handling
+      function initMiniKit() {{
+        if (typeof MiniKit !== 'undefined') {{
+          MiniKit.install();
+          MiniKit.init({{
+            app_id: 'app_263013ca6f702add37ad338fa43d4307'
+          }});
+          console.log('MiniKit initialized successfully');
+          return true;
+        }}
+        return false;
+      }}
+      
+      // Try immediate init, then fallback to polling
+      if (!initMiniKit()) {{
+        let attempts = 0;
+        const maxAttempts = 20; // 2 seconds max wait
+        const checkMiniKit = setInterval(() => {{
+          attempts++;
+          if (initMiniKit() || attempts >= maxAttempts) {{
+            clearInterval(checkMiniKit);
+            if (attempts >= maxAttempts) {{
+              console.error('MiniKit failed to load after 2 seconds');
+            }}
+          }}
+        }}, 100);
+      }}
+      
+      // Optional mobile console: add ?debug to URL
       if (location.search.includes('debug')) {{
         var s = document.createElement('script');
         s.src = 'https://cdn.jsdelivr.net/npm/eruda';
@@ -726,13 +753,6 @@ async def root():
     </div>
 
     <script>
-        // Initialize MiniKit
-        if (typeof MiniKit !== 'undefined') {
-            MiniKit.init({
-                app_id: 'app_263013ca6f702add37ad338fa43d4307'
-            });
-        }
-        
         // Application state
         let appState = {
             sessionId: new URLSearchParams(window.location.search).get('session') || 'demo-session-' + Date.now(),
@@ -745,7 +765,7 @@ async def root():
         };
         
         // Initialize app
-        window.addEventListener('load', () => {
+        window.addEventListener('load', () => {{
             console.log('RoluATM Mini App initialized');
             console.log('Session ID:', appState.sessionId);
             
@@ -753,30 +773,33 @@ async def root():
             elements.withdrawBtn.addEventListener('click', handleWithdraw);
             
             // Check if we're running in World App
-            if (typeof MiniKit === 'undefined') {
+            if (typeof MiniKit === 'undefined') {{
                 showStatus('Please open this page in World App', 'error');
                 elements.withdrawBtn.disabled = true;
-            }
-        });
+            }} else {{
+                console.log('MiniKit detected and ready');
+                showStatus('Ready to withdraw cash', 'success');
+            }}
+        }});
 
-        async function handleWithdraw() {
-            try {
+        async function handleWithdraw() {{
+            try {{
                 // Step 1: World ID Verification
                 showStatus('Verifying your World ID...', 'warning');
                 elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Verifying...';
                 elements.withdrawBtn.disabled = true;
 
-                const verifyPayload = {
+                const verifyPayload = {{
                     action: 'withdraw-cash',
                     signal: appState.sessionId,
                     verification_level: 'orb'
-                };
+                }};
 
                 const verifyResponse = await MiniKit.commands.verify(verifyPayload);
 
-                if (!verifyResponse.success) {
+                if (!verifyResponse.success) {{
                     throw new Error(verifyResponse.error || 'World ID Verification failed');
-                }
+                }}
 
                 console.log('World ID verification successful:', verifyResponse);
                 showStatus('World ID verified. Authorizing payment...', 'warning');
@@ -784,19 +807,19 @@ async def root():
                 // Step 2: Payment Authorization
                 elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Processing Payment...';
                 
-                const paymentPayload = {
+                const paymentPayload = {{
                     to: '0x742fd484b63E7C9b7f34FAb65A8c165B7cd5C5e8', // RoluATM wallet address
                     value: 10.50, // $10.50 (withdrawal + fee)
                     token: 'USDC',
                     description: 'RoluATM Cash Withdrawal',
                     reference: appState.sessionId
-                };
+                }};
 
                 const paymentResponse = await MiniKit.commands.pay(paymentPayload);
 
-                if (!paymentResponse.success) {
+                if (!paymentResponse.success) {{
                     throw new Error(paymentResponse.error || 'Payment failed');
-                }
+                }}
 
                 console.log('Payment authorized:', paymentResponse);
                 showStatus('Payment authorized! Dispensing cash...', 'success');
@@ -805,56 +828,56 @@ async def root():
                 // Step 3: Signal Cash Dispenser
                 await signalCashDispense();
 
-            } catch (error) {
+            }} catch (error) {{
                 console.error('Withdrawal process failed:', error);
                 showStatus('Error: ' + error.message, 'error');
                 elements.withdrawBtn.innerHTML = 'Retry Withdrawal';
                 elements.withdrawBtn.disabled = false;
-            }
-        }
+            }}
+        }}
         
         // Signal Cash Dispenser
-        async function signalCashDispense() {
-            try {
+        async function signalCashDispense() {{
+            try {{
                 // Send signal to your backend to activate the TFlex dispenser
-                const response = await fetch('https://rolu-atm-system.vercel.app/confirm-withdrawal', {
+                const response = await fetch('https://rolu-atm-system.vercel.app/confirm-withdrawal', {{
                     method: 'POST',
-                    headers: {
+                    headers: {{
                         'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
+                    }},
+                    body: JSON.stringify({{
                         kiosk_id: 'demo-kiosk-001',
                         session_id: appState.sessionId,
                         coins_dispensed: 40, // 40 quarters = $10
                         timestamp: new Date().toISOString()
-                    })
-                });
+                    }})
+                }});
                 
-                if (response.ok) {
+                if (response.ok) {{
                     showStatus('Cash dispensed successfully! Thank you!', 'success');
                     elements.withdrawBtn.innerHTML = '✅ Transaction Complete';
                     
                     // Send haptic feedback
-                    if (typeof MiniKit !== 'undefined') {
-                        MiniKit.commands.sendHapticFeedback({ type: 'success' });
-                    }
+                    if (typeof MiniKit !== 'undefined') {{
+                        MiniKit.commands.sendHapticFeedback({{ type: 'success' }});
+                    }}
                     
-                } else {
+                }} else {{
                     throw new Error('Dispenser communication failed');
-                }
+                }}
                 
-            } catch (error) {
+            }} catch (error) {{
                 console.error('Cash dispense failed:', error);
                 showStatus('Dispenser error. Please contact support.', 'error');
-            }
-        }
+            }}
+        }}
         
         // UI Helper Functions
-        function showStatus(message, type) {
+        function showStatus(message, type) {{
             elements.statusMessage.textContent = message;
-            elements.statusMessage.className = `status-message status-${type}`;
+            elements.statusMessage.className = 'status-message status-' + type;
             elements.statusMessage.style.display = 'block';
-        }
+        }}
     </script>
 </body>
 </html>
@@ -1024,9 +1047,36 @@ async def mini_app_interface(session: str = None):
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>RoluATM Mini App</title>
         <script src="https://minikit.world.org/v1/minikit.js"></script>
-        <script>MiniKit.install();</script>
-        <!-- Optional mobile console: add ?debug to URL -->
         <script>
+          // Load MiniKit properly with async handling
+          function initMiniKit() {{
+            if (typeof MiniKit !== 'undefined') {{
+              MiniKit.install();
+              MiniKit.init({{
+                app_id: 'app_263013ca6f702add37ad338fa43d4307'
+              }});
+              console.log('MiniKit initialized successfully');
+              return true;
+            }}
+            return false;
+          }}
+          
+          // Try immediate init, then fallback to polling
+          if (!initMiniKit()) {{
+            let attempts = 0;
+            const maxAttempts = 20; // 2 seconds max wait
+            const checkMiniKit = setInterval(() => {{
+              attempts++;
+              if (initMiniKit() || attempts >= maxAttempts) {{
+                clearInterval(checkMiniKit);
+                if (attempts >= maxAttempts) {{
+                  console.error('MiniKit failed to load after 2 seconds');
+                }}
+              }}
+            }}, 100);
+          }}
+          
+          // Optional mobile console: add ?debug to URL
           if (location.search.includes('debug')) {{
             var s = document.createElement('script');
             s.src = 'https://cdn.jsdelivr.net/npm/eruda';
