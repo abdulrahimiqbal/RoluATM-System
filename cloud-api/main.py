@@ -427,12 +427,10 @@ async def test_endpoint():
 
 @app.get("/pay/{session_id}")
 async def payment_interface(session_id: str, request: Request):
-    """Generate World ID payment interface"""
+    """Generate World ID Mini App payment interface"""
     
-    # For RoluATM, we're using World ID External Integration for physical ATM
-    # This generates the correct URL that opens the verification flow in World App
-    
-    world_id_verify_url = f"https://worldcoin.org/verify?app_id={WORLD_ID_APP_ID}&action={WORLD_ID_ACTION}&signal={session_id}"
+    # Generate the correct Mini App URL format
+    mini_app_url = f"worldapp://mini-app?app_id={WORLD_ID_APP_ID}&path=/pay/{session_id}"
     
     html_content = f"""
     <!DOCTYPE html>
@@ -538,6 +536,23 @@ async def payment_interface(session_id: str, request: Request):
                 font-size: 12px;
                 color: #adb5bd;
             }}
+            .amount-info {{
+                background: #e8f5e8;
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                border: 1px solid #c3e6c3;
+            }}
+            .amount-label {{
+                font-size: 14px;
+                color: #2d5a2d;
+                margin-bottom: 5px;
+            }}
+            .amount-value {{
+                font-size: 24px;
+                font-weight: bold;
+                color: #1a4d1a;
+            }}
         </style>
         <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     </head>
@@ -550,12 +565,19 @@ async def payment_interface(session_id: str, request: Request):
                 <div class="session-id">{session_id}</div>
             </div>
             
-            <div class="instructions">
-                Scan with World App to verify your identity
+            <div class="amount-info">
+                <div class="amount-label">Withdrawal Amount:</div>
+                <div class="amount-value">$10.00 USD</div>
+                <div style="font-size: 12px; color: #666; margin-top: 5px;">40 quarters + $0.50 fee</div>
             </div>
             
-            <a href="{world_id_verify_url}" class="verify-button">
-                Open in World App
+            <div class="instructions">
+                Scan with World App to verify your identity<br>
+                and authorize the withdrawal
+            </div>
+            
+            <a href="{mini_app_url}" class="verify-button">
+                Open RoluATM Mini App
             </a>
             
             <div class="qr-section">
@@ -563,7 +585,7 @@ async def payment_interface(session_id: str, request: Request):
                 <div class="qr-code">
                     <canvas id="qrcode"></canvas>
                 </div>
-                <div class="verify-url">{world_id_verify_url}</div>
+                <div class="verify-url">{mini_app_url}</div>
             </div>
             
             <div class="footer">
@@ -572,8 +594,8 @@ async def payment_interface(session_id: str, request: Request):
         </div>
         
         <script>
-            // Generate QR code
-            QRCode.toCanvas(document.getElementById('qrcode'), '{world_id_verify_url}', {{
+            // Generate QR code for Mini App
+            QRCode.toCanvas(document.getElementById('qrcode'), '{mini_app_url}', {{
                 width: 200,
                 height: 200,
                 margin: 2,
@@ -583,7 +605,7 @@ async def payment_interface(session_id: str, request: Request):
                 }}
             }}, function (error) {{
                 if (error) console.error(error);
-                console.log('QR code generated successfully!');
+                console.log('Mini App QR code generated successfully!');
             }});
             
             // Auto-refresh verification status
