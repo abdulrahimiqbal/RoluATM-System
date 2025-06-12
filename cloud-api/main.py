@@ -550,7 +550,311 @@ async def serve_payment_app(session_id: str):
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """Root endpoint - Mini App Interface"""
+    # Serve the mini-app HTML directly
+    html_content = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoluATM - Cash Withdrawal</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .logo {
+            font-size: 32px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 16px;
+            color: #7f8c8d;
+        }
+        
+        .amount-display {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .amount-value {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .amount-desc {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .action-button {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 15px 0;
+            transition: all 0.3s ease;
+        }
+        
+        .action-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .action-button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .status-message {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-weight: 500;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 12px;
+            color: #95a5a6;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@0.0.44/dist/minikit.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🏧 RoluATM</div>
+            <div class="subtitle">World ID Verified Cash Withdrawal</div>
+        </div>
+        
+        <div class="amount-display">
+            <div class="amount-value">$10.00</div>
+            <div class="amount-desc">Cash Withdrawal + $0.50 fee</div>
+        </div>
+        
+        <div id="status-message" class="status-message" style="display: none;"></div>
+        
+        <button id="withdraw-btn" class="action-button">
+            Withdraw $10.50
+        </button>
+        
+        <div class="footer">
+            Powered by World ID • Secure • Private
+        </div>
+    </div>
+
+    <script>
+        // Initialize MiniKit
+        if (typeof MiniKit !== 'undefined') {
+            MiniKit.init({
+                app_id: 'app_263013ca6f702add37ad338fa43d4307'
+            });
+        }
+        
+        // Application state
+        let appState = {
+            sessionId: new URLSearchParams(window.location.search).get('session') || 'demo-session-' + Date.now(),
+        };
+        
+        // DOM elements
+        const elements = {
+            withdrawBtn: document.getElementById('withdraw-btn'),
+            statusMessage: document.getElementById('status-message'),
+        };
+        
+        // Initialize app
+        window.addEventListener('load', () => {
+            console.log('RoluATM Mini App initialized');
+            console.log('Session ID:', appState.sessionId);
+            
+            // Set up event listeners
+            elements.withdrawBtn.addEventListener('click', handleWithdraw);
+            
+            // Check if we're running in World App
+            if (typeof MiniKit === 'undefined') {
+                showStatus('Please open this page in World App', 'error');
+                elements.withdrawBtn.disabled = true;
+            }
+        });
+
+        async function handleWithdraw() {
+            try {
+                // Step 1: World ID Verification
+                showStatus('Verifying your World ID...', 'warning');
+                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Verifying...';
+                elements.withdrawBtn.disabled = true;
+
+                const verifyPayload = {
+                    action: 'withdraw-cash',
+                    signal: appState.sessionId,
+                    verification_level: 'orb'
+                };
+
+                const verifyResponse = await MiniKit.commands.verify(verifyPayload);
+
+                if (!verifyResponse.success) {
+                    throw new Error(verifyResponse.error || 'World ID Verification failed');
+                }
+
+                console.log('World ID verification successful:', verifyResponse);
+                showStatus('World ID verified. Authorizing payment...', 'warning');
+
+                // Step 2: Payment Authorization
+                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Processing Payment...';
+                
+                const paymentPayload = {
+                    to: '0x742fd484b63E7C9b7f34FAb65A8c165B7cd5C5e8', // RoluATM wallet address
+                    value: 10.50, // $10.50 (withdrawal + fee)
+                    token: 'USDC',
+                    description: 'RoluATM Cash Withdrawal',
+                    reference: appState.sessionId
+                };
+
+                const paymentResponse = await MiniKit.commands.pay(paymentPayload);
+
+                if (!paymentResponse.success) {
+                    throw new Error(paymentResponse.error || 'Payment failed');
+                }
+
+                console.log('Payment authorized:', paymentResponse);
+                showStatus('Payment authorized! Dispensing cash...', 'success');
+                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Dispensing...';
+
+                // Step 3: Signal Cash Dispenser
+                await signalCashDispense();
+
+            } catch (error) {
+                console.error('Withdrawal process failed:', error);
+                showStatus('Error: ' + error.message, 'error');
+                elements.withdrawBtn.innerHTML = 'Retry Withdrawal';
+                elements.withdrawBtn.disabled = false;
+            }
+        }
+        
+        // Signal Cash Dispenser
+        async function signalCashDispense() {
+            try {
+                // Send signal to your backend to activate the TFlex dispenser
+                const response = await fetch('https://rolu-atm-system.vercel.app/confirm-withdrawal', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        kiosk_id: 'demo-kiosk-001',
+                        session_id: appState.sessionId,
+                        coins_dispensed: 40, // 40 quarters = $10
+                        timestamp: new Date().toISOString()
+                    })
+                });
+                
+                if (response.ok) {
+                    showStatus('Cash dispensed successfully! Thank you!', 'success');
+                    elements.withdrawBtn.innerHTML = '✅ Transaction Complete';
+                    
+                    // Send haptic feedback
+                    if (typeof MiniKit !== 'undefined') {
+                        MiniKit.commands.sendHapticFeedback({ type: 'success' });
+                    }
+                    
+                } else {
+                    throw new Error('Dispenser communication failed');
+                }
+                
+            } catch (error) {
+                console.error('Cash dispense failed:', error);
+                showStatus('Dispenser error. Please contact support.', 'error');
+            }
+        }
+        
+        // UI Helper Functions
+        function showStatus(message, type) {
+            elements.statusMessage.textContent = message;
+            elements.statusMessage.className = `status-message status-${type}`;
+            elements.statusMessage.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
+    """
+    return HTMLResponse(content=html_content)
+
+
+@app.get("/status")
+async def api_status():
+    """API Status endpoint"""
     return {
         "service": "RoluATM Cloud API",
         "version": "1.0.0",
