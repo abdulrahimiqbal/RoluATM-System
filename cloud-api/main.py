@@ -682,8 +682,15 @@ async def root():
             console.log('In iframe:', window !== window.top);
             console.log('Referrer:', document.referrer || 'none');
             
-            // Install MiniKit with the app ID
             try {{
+                // Check if MiniKit is already installed
+                if (MiniKit.isInstalled()) {{
+                    console.log('MiniKit is already installed and ready');
+                    initializeApp();
+                    return;
+                }}
+                
+                // Install MiniKit with the app ID if not already installed
                 console.log('Installing MiniKit with app ID...');
                 const installResult = MiniKit.install('app_263013ca6f702add37ad338fa43d4307');
                 console.log('MiniKit install result:', installResult);
@@ -700,7 +707,7 @@ async def root():
                 console.log('Attempting to initialize app...');
                 initializeApp();
             }} catch (error) {{
-                console.error('Error during MiniKit installation:', error);
+                console.error('Error during MiniKit initialization:', error);
                 showStatus('❌ Error: Failed to initialize. Please try refreshing the page.', 'error');
             }}
         }}
