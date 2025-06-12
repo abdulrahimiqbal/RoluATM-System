@@ -14,9 +14,9 @@ from typing import List, Optional
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse
 from sqlmodel import Session, create_engine, select
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
@@ -251,8 +251,8 @@ async def health_check():
 @app.post("/verify-worldid")
 async def verify_worldid(
     request: VerifyWorldIDRequest,
-    session: Session = Depends(get_session),
-    background_tasks: BackgroundTasks = BackgroundTasks()
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session)
 ):
     """Verify World ID and create user if needed"""
     
@@ -396,8 +396,8 @@ async def verify_withdrawal(
 @app.post("/confirm-withdrawal")
 async def confirm_withdrawal(
     request: WithdrawalSettleRequest,
-    session: Session = Depends(get_session),
-    background_tasks: BackgroundTasks = BackgroundTasks()
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session)
 ):
     """Confirm withdrawal after coins dispensed (used by kiosk)"""
     
@@ -444,13 +444,14 @@ async def kiosk_events(kiosk_id: str):
     
     async def event_generator():
         try:
-            while True:
-                # Send periodic heartbeat
+            # Send limited heartbeats to avoid serverless timeout
+            for i in range(10):  # Maximum 10 heartbeats (5 minutes)
                 yield {
                     "event": "heartbeat",
                     "data": {
                         "timestamp": datetime.now(timezone.utc).isoformat(),
-                        "kiosk_id": kiosk_id
+                        "kiosk_id": kiosk_id,
+                        "sequence": i
                     }
                 }
                 
@@ -539,6 +540,66 @@ async def test_endpoint():
         "message": "Hello from RoluATM Cloud API!",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "status": "success"
+    }
+
+
+@app.post("/kiosk-health")
+async def update_kiosk_health(
+    request: KioskHealthUpdate,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session)
+):
+    """Update kiosk health status"""
+    
+    # Get or create kiosk
+    kiosk = session.exec(
+        select(Kiosk)
+        .where(Kiosk.kiosk_id == request.kiosk_id)
+    ).first()
+    
+    if not kiosk:
+        kiosk = Kiosk(kiosk_id=request.kiosk_id)
+        session.add(kiosk)
+        session.flush()
+    
+    # Update kiosk status
+    kiosk.last_seen_at = datetime.now(timezone.utc)
+    kiosk.last_health_status = request.overall_status
+    kiosk.serial_port = request.tflex_port
+    
+    # Create health log entry
+    health_log = KioskHealthLog(
+        kiosk_id=request.kiosk_id,
+        overall_status=request.overall_status,
+        hardware_status=request.hardware_status,
+        cloud_status=request.cloud_status,
+        tflex_connected=request.tflex_connected,
+        tflex_port=request.tflex_port,
+        coin_count=request.coin_count,
+        error_details=request.error_details
+    )
+    
+    session.add(health_log)
+    session.commit()
+    
+    # Broadcast health update to SSE subscribers
+    background_tasks.add_task(
+        broadcast_kiosk_event,
+        request.kiosk_id,
+        "health_update",
+        {
+            "overall_status": request.overall_status,
+            "hardware_status": request.hardware_status,
+            "cloud_status": request.cloud_status,
+            "tflex_connected": request.tflex_connected,
+            "coin_count": request.coin_count
+        }
+    )
+    
+    return {
+        "success": True,
+        "kiosk_id": request.kiosk_id,
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
