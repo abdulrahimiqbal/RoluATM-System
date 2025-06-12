@@ -429,10 +429,10 @@ async def test_endpoint():
 async def payment_interface(session_id: str, request: Request):
     """Generate World ID payment interface"""
     
-    # For RoluATM, we're using World ID Kiosk mode for physical ATM
-    # This generates the correct URL that opens the verification drawer in World App
+    # For RoluATM, we're using World ID External Integration for physical ATM
+    # This generates the correct URL that opens the verification flow in World App
     
-    world_id_verify_url = f"https://developer.worldcoin.org/kiosk/{WORLD_ID_APP_ID}?action={WORLD_ID_ACTION}&signal={session_id}"
+    world_id_verify_url = f"https://worldcoin.org/verify?app_id={WORLD_ID_APP_ID}&action={WORLD_ID_ACTION}&signal={session_id}"
     
     html_content = f"""
     <!DOCTYPE html>
