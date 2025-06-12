@@ -40,36 +40,6 @@
             color: #7f8c8d;
         }
         
-        .step {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 20px;
-            margin: 20px 0;
-            border-left: 4px solid #3498db;
-        }
-        
-        .step.active {
-            border-left-color: #27ae60;
-            background: #e8f5e8;
-        }
-        
-        .step.completed {
-            border-left-color: #2ecc71;
-            background: #d5f4e6;
-        }
-        
-        .step-title {
-            font-weight: 600;
-            font-size: 18px;
-            margin-bottom: 8px;
-            color: #2c3e50;
-        }
-        
-        .step-desc {
-            color: #7f8c8d;
-            font-size: 14px;
-        }
-        
         .amount-display {
             background: linear-gradient(135deg, #4CAF50, #45a049);
             color: white;
@@ -114,26 +84,6 @@
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
-        }
-        
-        .balance-info {
-            background: #e3f2fd;
-            border-radius: 10px;
-            padding: 15px;
-            margin: 15px 0;
-            border: 1px solid #bbdefb;
-        }
-        
-        .balance-label {
-            font-size: 12px;
-            color: #1976d2;
-            margin-bottom: 5px;
-        }
-        
-        .balance-value {
-            font-size: 20px;
-            font-weight: bold;
-            color: #0d47a1;
         }
         
         .status-message {
@@ -199,41 +149,10 @@
             <div class="amount-desc">Cash Withdrawal + $0.50 fee</div>
         </div>
         
-        <div id="step-verify" class="step active">
-            <div class="step-title">1. Verify Identity</div>
-            <div class="step-desc">Prove you're a unique human with World ID</div>
-        </div>
-        
-        <div id="step-payment" class="step">
-            <div class="step-title">2. Authorize Payment</div>
-            <div class="step-desc">Check balance and authorize withdrawal</div>
-        </div>
-        
-        <div id="step-dispense" class="step">
-            <div class="step-title">3. Collect Cash</div>
-            <div class="step-desc">Cash will be dispensed from the ATM</div>
-        </div>
-        
-        <div id="balance-section" style="display: none;">
-            <div class="balance-info">
-                <div class="balance-label">Your Wallet Balance</div>
-                <div class="balance-value" id="wallet-balance">$--</div>
-            </div>
-        </div>
-        
         <div id="status-message" class="status-message" style="display: none;"></div>
         
-        <button id="verify-btn" class="action-button">
-            Verify with World ID
-        </button>
-        
-        <button id="payment-btn" class="action-button" style="display: none;" disabled>
-            <span class="spinner" style="display: none;"></span>
-            Authorize Payment
-        </button>
-        
-        <button id="dispense-btn" class="action-button" style="display: none;" disabled>
-            Dispensing Cash...
+        <button id="withdraw-btn" class="action-button">
+            Withdraw $10.50
         </button>
         
         <div class="footer">
@@ -252,23 +171,12 @@
         // Application state
         let appState = {
             sessionId: new URLSearchParams(window.location.search).get('session') || 'demo-session-' + Date.now(),
-            verified: false,
-            walletConnected: false,
-            paymentAuthorized: false,
-            walletBalance: null
         };
         
         // DOM elements
         const elements = {
-            verifyBtn: document.getElementById('verify-btn'),
-            paymentBtn: document.getElementById('payment-btn'),
-            dispenseBtn: document.getElementById('dispense-btn'),
-            balanceSection: document.getElementById('balance-section'),
-            walletBalance: document.getElementById('wallet-balance'),
+            withdrawBtn: document.getElementById('withdraw-btn'),
             statusMessage: document.getElementById('status-message'),
-            stepVerify: document.getElementById('step-verify'),
-            stepPayment: document.getElementById('step-payment'),
-            stepDispense: document.getElementById('step-dispense')
         };
         
         // Initialize app
@@ -277,120 +185,40 @@
             console.log('Session ID:', appState.sessionId);
             
             // Set up event listeners
-            elements.verifyBtn.addEventListener('click', handleWorldIDVerification);
-            elements.paymentBtn.addEventListener('click', handlePaymentAuthorization);
+            elements.withdrawBtn.addEventListener('click', handleWithdraw);
             
             // Check if we're running in World App
             if (typeof MiniKit === 'undefined') {
                 showStatus('Please open this page in World App', 'error');
-                elements.verifyBtn.disabled = true;
+                elements.withdrawBtn.disabled = true;
             }
         });
-        
-        // World ID Verification
-        async function handleWorldIDVerification() {
+
+        async function handleWithdraw() {
             try {
+                // Step 1: World ID Verification
                 showStatus('Verifying your World ID...', 'warning');
-                elements.verifyBtn.innerHTML = '<span class="spinner"></span>Verifying...';
-                elements.verifyBtn.disabled = true;
-                
+                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Verifying...';
+                elements.withdrawBtn.disabled = true;
+
                 const verifyPayload = {
                     action: 'withdraw-cash',
                     signal: appState.sessionId,
                     verification_level: 'orb'
                 };
-                
+
                 const verifyResponse = await MiniKit.commands.verify(verifyPayload);
-                
-                if (verifyResponse.success) {
-                    console.log('World ID verification successful:', verifyResponse);
-                    appState.verified = true;
-                    
-                    // Update UI
-                    completeStep('verify');
-                    activateStep('payment');
-                    showStatus('World ID verified successfully!', 'success');
-                    
-                    // Hide verify button, show payment button
-                    elements.verifyBtn.style.display = 'none';
-                    elements.paymentBtn.style.display = 'block';
-                    
-                    // Connect wallet to check balance
-                    await connectWallet();
-                    
-                } else {
-                    throw new Error(verifyResponse.error || 'Verification failed');
+
+                if (!verifyResponse.success) {
+                    throw new Error(verifyResponse.error || 'World ID Verification failed');
                 }
+
+                console.log('World ID verification successful:', verifyResponse);
+                showStatus('World ID verified. Authorizing payment...', 'warning');
+
+                // Step 2: Payment Authorization
+                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Processing Payment...';
                 
-            } catch (error) {
-                console.error('World ID verification failed:', error);
-                showStatus('Verification failed: ' + error.message, 'error');
-                elements.verifyBtn.innerHTML = 'Retry Verification';
-                elements.verifyBtn.disabled = false;
-            }
-        }
-        
-        // Wallet Connection and Balance Check
-        async function connectWallet() {
-            try {
-                console.log('Connecting to wallet...');
-                
-                const walletResponse = await MiniKit.commands.walletAuth({
-                    permissions: ['wallet:read']
-                });
-                
-                if (walletResponse.success) {
-                    console.log('Wallet connected:', walletResponse);
-                    appState.walletConnected = true;
-                    
-                    // Get wallet balance (simulated - replace with actual balance check)
-                    await checkWalletBalance();
-                    
-                    // Enable payment button
-                    elements.paymentBtn.disabled = false;
-                    
-                } else {
-                    throw new Error('Failed to connect wallet');
-                }
-                
-            } catch (error) {
-                console.error('Wallet connection failed:', error);
-                showStatus('Could not access wallet. Please try again.', 'error');
-            }
-        }
-        
-        // Check Wallet Balance (simulated)
-        async function checkWalletBalance() {
-            try {
-                // In a real implementation, you would use MiniKit to check USDC balance
-                // For demo purposes, we'll simulate a balance check
-                const simulatedBalance = 25.50; // $25.50 USDC
-                
-                appState.walletBalance = simulatedBalance;
-                elements.walletBalance.textContent = `$${simulatedBalance.toFixed(2)} USDC`;
-                elements.balanceSection.style.display = 'block';
-                
-                if (simulatedBalance >= 10.50) {
-                    showStatus('Sufficient balance available!', 'success');
-                } else {
-                    showStatus('Insufficient balance. Add funds to continue.', 'error');
-                    elements.paymentBtn.disabled = true;
-                }
-                
-            } catch (error) {
-                console.error('Balance check failed:', error);
-                showStatus('Could not check balance', 'error');
-            }
-        }
-        
-        // Payment Authorization
-        async function handlePaymentAuthorization() {
-            try {
-                showStatus('Authorizing payment...', 'warning');
-                elements.paymentBtn.innerHTML = '<span class="spinner"></span>Processing...';
-                elements.paymentBtn.disabled = true;
-                
-                // Payment parameters
                 const paymentPayload = {
                     to: '0x742fd484b63E7C9b7f34FAb65A8c165B7cd5C5e8', // RoluATM wallet address
                     value: 10.50, // $10.50 (withdrawal + fee)
@@ -398,34 +226,25 @@
                     description: 'RoluATM Cash Withdrawal',
                     reference: appState.sessionId
                 };
-                
+
                 const paymentResponse = await MiniKit.commands.pay(paymentPayload);
-                
-                if (paymentResponse.success) {
-                    console.log('Payment authorized:', paymentResponse);
-                    appState.paymentAuthorized = true;
-                    
-                    // Update UI
-                    completeStep('payment');
-                    activateStep('dispense');
-                    showStatus('Payment authorized! Dispensing cash...', 'success');
-                    
-                    // Hide payment button, show dispensing status
-                    elements.paymentBtn.style.display = 'none';
-                    elements.dispenseBtn.style.display = 'block';
-                    
-                    // Signal the ATM to dispense cash
-                    await signalCashDispense();
-                    
-                } else {
+
+                if (!paymentResponse.success) {
                     throw new Error(paymentResponse.error || 'Payment failed');
                 }
-                
+
+                console.log('Payment authorized:', paymentResponse);
+                showStatus('Payment authorized! Dispensing cash...', 'success');
+                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Dispensing...';
+
+                // Step 3: Signal Cash Dispenser
+                await signalCashDispense();
+
             } catch (error) {
-                console.error('Payment authorization failed:', error);
-                showStatus('Payment failed: ' + error.message, 'error');
-                elements.paymentBtn.innerHTML = 'Retry Payment';
-                elements.paymentBtn.disabled = false;
+                console.error('Withdrawal process failed:', error);
+                showStatus('Error: ' + error.message, 'error');
+                elements.withdrawBtn.innerHTML = 'Retry Withdrawal';
+                elements.withdrawBtn.disabled = false;
             }
         }
         
@@ -447,9 +266,8 @@
                 });
                 
                 if (response.ok) {
-                    completeStep('dispense');
                     showStatus('Cash dispensed successfully! Thank you!', 'success');
-                    elements.dispenseBtn.innerHTML = '✅ Transaction Complete';
+                    elements.withdrawBtn.innerHTML = '✅ Transaction Complete';
                     
                     // Send haptic feedback
                     if (typeof MiniKit !== 'undefined') {
@@ -471,17 +289,6 @@
             elements.statusMessage.textContent = message;
             elements.statusMessage.className = `status-message status-${type}`;
             elements.statusMessage.style.display = 'block';
-        }
-        
-        function completeStep(stepName) {
-            const stepElement = document.getElementById(`step-${stepName}`);
-            stepElement.classList.remove('active');
-            stepElement.classList.add('completed');
-        }
-        
-        function activateStep(stepName) {
-            const stepElement = document.getElementById(`step-${stepName}`);
-            stepElement.classList.add('active');
         }
     </script>
 </body>

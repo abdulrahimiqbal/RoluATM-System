@@ -8,6 +8,8 @@ and cloud API connectivity. Fails loudly if hardware or cloud unavailable.
 import os
 import logging
 import time
+import threading
+import json
 from typing import Dict, Optional
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify
@@ -16,6 +18,7 @@ from prometheus_client import Counter, Histogram, Gauge, generate_latest
 import requests
 from dotenv import load_dotenv
 
+import sseclient
 from tflex_driver import TFlexDriver, TFlexException, TFlexStatus
 
 # Load environment variables
@@ -372,8 +375,57 @@ def root():
 
 
 def create_app():
-    """Application factory"""
+    """Create and configure the Flask app"""
+    app = Flask(__name__)
+    CORS(app)
     return app
+
+
+def listen_for_cloud_events():
+    """Listen for SSE events from the cloud API"""
+    global tflex_driver
+    if not CLOUD_API_URL or not KIOSK_ID:
+        logger.error("Cannot listen for cloud events, URL or Kiosk ID not set")
+        return
+
+    url = f"{CLOUD_API_URL}/events/{KIOSK_ID}"
+    logger.info(f"Connecting to cloud event stream: {url}")
+
+    while True:
+        try:
+            client = sseclient.SSEClient(url)
+            for event in client.events():
+                if event.event == 'dispense':
+                    logger.info(f"Received dispense event: {event.data}")
+                    try:
+                        data = json.loads(event.data)
+                        coins_to_dispense = data.get('coins_dispensed')
+
+                        if isinstance(coins_to_dispense, int) and coins_to_dispense > 0:
+                            if tflex_driver and tflex_driver.is_connected():
+                                logger.info(f"Attempting to dispense {coins_to_dispense} coins")
+                                success = tflex_driver.dispense_coins(coins_to_dispense)
+                                if success:
+                                    logger.info("Dispense command successful")
+                                    COIN_DISPENSES.inc(coins_to_dispense)
+                                else:
+                                    logger.error("Dispense command failed")
+                            else:
+                                logger.error("T-Flex driver not available, cannot dispense")
+                        else:
+                            logger.error(f"Invalid coins_dispensed value: {coins_to_dispense}")
+
+                    except json.JSONDecodeError:
+                        logger.error("Failed to decode dispense event data")
+                    except Exception as e:
+                        logger.error(f"Error processing dispense event: {e}")
+                elif event.event == 'message':
+                     logger.info(f"Cloud event message: {event.data}")
+
+
+        except Exception as e:
+            logger.error(f"SSE connection failed: {e}")
+            time.sleep(5) # Wait before reconnecting
 
 
 if __name__ == '__main__':
@@ -381,11 +433,18 @@ if __name__ == '__main__':
         # Initialize hardware
         init_hardware()
         
+        # Start cloud event listener in background
+        listener_thread = threading.Thread(target=listen_for_cloud_events, daemon=True)
+        listener_thread.start()
+        
+        # Create Flask app
+        app = create_app()
+        
         # Initial cloud connectivity check
         check_cloud_connectivity()
         
         # Start Flask app
-        port = int(os.getenv('FLASK_PORT', '5000'))
+        port = int(os.getenv('FLASK_PORT', '5001'))
         
         logger.info(f"Starting RoluATM Kiosk Backend on port {port}")
         logger.info(f"Kiosk ID: {KIOSK_ID}")
