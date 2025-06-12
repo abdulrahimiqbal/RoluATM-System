@@ -19,7 +19,6 @@ from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request, S
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from sqlmodel import Field, SQLModel, Relationship, Session, create_engine, select
-from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
