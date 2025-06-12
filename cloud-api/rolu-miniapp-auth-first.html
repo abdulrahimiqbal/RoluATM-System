@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoluATM - Cash Withdrawal</title>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .logo {
+            font-size: 32px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 16px;
+            color: #7f8c8d;
+        }
+        
+        .amount-display {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .amount-value {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .amount-desc {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .action-button {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 15px 0;
+            transition: all 0.3s ease;
+        }
+        
+        .action-button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        
+        .status-message {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-weight: 500;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .debug-console {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 9999;
+            border-bottom: 2px solid #0f0;
+        }
+
+        .debug-info {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 12px;
+            color: #95a5a6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🏧 RoluATM</div>
+            <div class="subtitle">World ID Verified Cash Withdrawal</div>
+        </div>
+        
+        <div class="amount-display">
+            <div class="amount-value">$10.00</div>
+            <div class="amount-desc">Cash Withdrawal + $0.50 fee</div>
+        </div>
+        
+        <div id="status-message" class="status-message" style="display: none;"></div>
+        
+        <button id="withdraw-btn" class="action-button">
+            Withdraw $10.50
+        </button>
+
+        <div id="debug-info" class="debug-info"></div>
+        
+        <div class="footer">
+            Powered by World ID • Secure • Private
+        </div>
+    </div>
+
+    <script>
+        // App Configuration
+        const APP_CONFIG = {
+            appId: 'app_263013ca6f702add37ad338fa43d4307',
+            action: 'withdraw-cash'
+        };
+
+        // Create debug console
+        const debugConsole = document.createElement('div');
+        debugConsole.className = 'debug-console';
+        document.body.appendChild(debugConsole);
+        
+        // Debug logging
+        function debugLog(message, type = 'log') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.style.color = type === 'error' ? '#f00' : type === 'warn' ? '#ff0' : '#0f0';
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            debugConsole.appendChild(logEntry);
+            debugConsole.scrollTop = debugConsole.scrollHeight;
+            console[type](message);
+        }
+
+        // Status and button functions
+        function showStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status-message');
+            statusEl.textContent = message;
+            statusEl.className = `status-message status-${type}`;
+            statusEl.style.display = 'block';
+            debugLog(`Status: ${type.toUpperCase()} - ${message}`);
+        }
+
+        function setButtonState(text, disabled = false) {
+            const btn = document.getElementById('withdraw-btn');
+            btn.textContent = text;
+            btn.disabled = disabled;
+            debugLog(`Button: "${text}", disabled: ${disabled}`);
+        }
+
+        function updateDebugInfo() {
+            const debugInfo = document.getElementById('debug-info');
+            debugInfo.innerHTML = `
+                <strong>Debug Info:</strong><br>
+                URL: ${window.location.href}<br>
+                User Agent: ${navigator.userAgent}<br>
+                window.WorldApp: ${!!window.WorldApp}<br>
+                window.MiniKit: ${!!window.MiniKit}<br>
+                typeof MiniKit: ${typeof window.MiniKit}<br>
+                WorldApp Commands: ${window.WorldApp?.supported_commands?.map(c => c.name).join(', ') || 'N/A'}
+            `;
+        }
+
+        // World ID verification using postMessage
+        async function performWorldIDVerification() {
+            debugLog('🔐 Starting World ID verification...');
+            
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error('Verification timeout'));
+                }, 30000);
+
+                const messageHandler = (event) => {
+                    debugLog('Received message: ' + JSON.stringify(event.data));
+                    
+                    if (event.data?.eventType === 'verify') {
+                        clearTimeout(timeout);
+                        window.removeEventListener('message', messageHandler);
+                        
+                        if (event.data.eventData?.nullifier_hash) {
+                            resolve(event.data.eventData);
+                        } else {
+                            reject(new Error('Invalid verification response'));
+                        }
+                    }
+                };
+
+                window.addEventListener('message', messageHandler);
+
+                // Send verification request
+                const verifyMessage = {
+                    eventType: 'verify',
+                    eventData: {
+                        action: APP_CONFIG.action,
+                        signal: 'demo-session-' + Date.now(),
+                        verification_level: 'orb'
+                    }
+                };
+
+                debugLog('Sending verify message: ' + JSON.stringify(verifyMessage));
+                window.parent.postMessage(verifyMessage, '*');
+            });
+        }
+
+        // Handle withdrawal
+        async function handleWithdrawal() {
+            debugLog('💰 Starting withdrawal...');
+            
+            try {
+                setButtonState('Verifying...', true);
+                showStatus('Verifying your World ID...', 'warning');
+
+                const verificationResult = await performWorldIDVerification();
+                debugLog('✅ Verification successful: ' + JSON.stringify(verificationResult));
+                
+                showStatus('Verification successful! Processing payment...', 'success');
+                setButtonState('Processing...', true);
+
+                // Send to backend
+                const response = await fetch('/api/initiate-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        payload: verificationResult,
+                        amount: 10.50
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Backend error: ${response.status}`);
+                }
+
+                const paymentData = await response.json();
+                debugLog('Payment initiated: ' + JSON.stringify(paymentData));
+
+                showStatus('Payment successful! Cash dispensing...', 'success');
+                setButtonState('Cash Dispensing...', true);
+
+                setTimeout(() => {
+                    showStatus('Cash dispensed! Please collect your money.', 'success');
+                    setButtonState('Transaction Complete', true);
+                }, 3000);
+
+            } catch (error) {
+                debugLog('❌ Error: ' + error.message);
+                showStatus('Error: ' + error.message, 'error');
+                setButtonState('Try Again', false);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            debugLog('🚀 RoluATM initialized');
+            debugLog('User Agent: ' + navigator.userAgent);
+            debugLog('URL: ' + window.location.href);
+            
+            updateDebugInfo();
+            
+            if (window.WorldApp) {
+                debugLog('✅ World App detected');
+                showStatus('Ready to withdraw. Click to verify with World ID.', 'success');
+                setButtonState('Withdraw $10.50', false);
+            } else {
+                debugLog('❌ World App not detected');
+                showStatus('Please open this page in the World App.', 'error');
+                setButtonState('Open in World App', true);
+            }
+
+            // Add click handler
+            document.getElementById('withdraw-btn').addEventListener('click', (event) => {
+                event.preventDefault();
+                debugLog('🔥 Button clicked!');
+                handleWithdrawal();
+            });
+        });
+    </script>
+</body>
+</html> 
