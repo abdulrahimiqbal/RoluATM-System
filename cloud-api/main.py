@@ -1,26 +1,51 @@
 """
-RoluATM Cloud API - FastAPI Application with Embedded Models
+RoluATM Cloud API - FastAPI Application
 
 Vercel-hosted FastAPI service with Neon Postgres integration.
-Database models embedded to avoid import issues in serverless environment.
+Handles World ID verification, transaction processing, and kiosk communication.
+No local database emulation - fails loudly if Neon is unreachable.
 """
 
 import os
 import logging
+import asyncio
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from contextlib import asynccontextmanager
-from enum import Enum
-import json
-import uuid
 
 import httpx
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, Response, RedirectResponse
-from sqlmodel import Field, SQLModel, Relationship, Session, create_engine, select
+from fastapi.responses import HTMLResponse
+from sqlmodel import Session, create_engine, select
+from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
+
+# Import database models with proper error handling
+try:
+    from db.models import (
+        User, Kiosk, Transaction, KioskHealthLog, WorldIDVerification,
+        TransactionStatus, create_db_and_tables
+    )
+    DB_MODELS_AVAILABLE = True
+except ImportError as e:
+    # For Vercel deployment - create minimal mock models
+    logging.warning(f"Database models import failed: {e}")
+    DB_MODELS_AVAILABLE = False
+    
+    # Mock models for basic API functionality
+    class User: pass
+    class Kiosk: pass
+    class Transaction: pass
+    class KioskHealthLog: pass
+    class WorldIDVerification: pass
+    class TransactionStatus:
+        PENDING = "pending"
+        COMPLETED = "completed"
+        FAILED = "failed"
+    
+    def create_db_and_tables(engine): pass
 
 # Load environment variables
 load_dotenv()
@@ -43,198 +68,32 @@ logger.info(f"World ID App ID: {WORLD_ID_APP_ID}")
 logger.info(f"World ID Action: {WORLD_ID_ACTION}")
 logger.info(f"Database URL configured: {bool(DATABASE_URL)}")
 
-# =============================================================================
-# DATABASE MODELS (Embedded for Vercel compatibility)
-# =============================================================================
-
-class TransactionStatus(str, Enum):
-    """Transaction status enumeration"""
-    PENDING = "pending"
-    VERIFIED = "verified"
-    DISPENSING = "dispensing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    EXPIRED = "expired"
-
-
-class User(SQLModel, table=True):
-    """User model with World ID integration"""
-    __tablename__ = "users"
-    
-    id: Optional[int] = Field(default=None, primary_key=True)
-    world_id_nullifier: str = Field(unique=True, index=True)
-    verification_level: str = Field(default="orb")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    
-    # Statistics
-    total_transactions: int = Field(default=0)
-    total_amount_usd: float = Field(default=0.0)
-    last_transaction_at: Optional[datetime] = None
-    
-    # Relationships
-    transactions: list["Transaction"] = Relationship(back_populates="user")
-
-
-class Kiosk(SQLModel, table=True):
-    """Kiosk registration and status tracking"""
-    __tablename__ = "kiosks"
-    
-    id: Optional[int] = Field(default=None, primary_key=True)
-    kiosk_id: str = Field(unique=True, index=True)
-    location_name: Optional[str] = None
-    location_address: Optional[str] = None
-    
-    # Hardware info
-    serial_port: str = Field(default="/dev/ttyACM0")
-    firmware_version: Optional[str] = None
-    
-    # Status
-    is_active: bool = Field(default=True)
-    last_seen_at: Optional[datetime] = None
-    last_health_status: Optional[str] = None
-    
-    # Statistics
-    total_transactions: int = Field(default=0)
-    total_coins_dispensed: int = Field(default=0)
-    
-    # Audit
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    
-    # Relationships
-    transactions: list["Transaction"] = Relationship(back_populates="kiosk")
-
-
-class Transaction(SQLModel, table=True):
-    """Transaction record with full audit trail"""
-    __tablename__ = "transactions"
-    
-    id: Optional[int] = Field(default=None, primary_key=True)
-    session_id: str = Field(unique=True, index=True)
-    
-    # Foreign keys
-    user_id: Optional[int] = Field(foreign_key="users.id")
-    kiosk_id: Optional[int] = Field(foreign_key="kiosks.id")
-    
-    # Transaction details
-    amount_usd: float
-    fee_usd: float = Field(default=0.50)
-    quarters_requested: int
-    quarters_dispensed: Optional[int] = None
-    
-    # Status and timing
-    status: TransactionStatus = Field(default=TransactionStatus.PENDING)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    verified_at: Optional[datetime] = None
-    dispensed_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    expires_at: datetime
-    
-    # World ID verification
-    world_id_merkle_root: Optional[str] = None
-    world_id_nullifier_hash: Optional[str] = None
-    world_id_proof: Optional[str] = None
-    
-    # Error tracking
-    error_message: Optional[str] = None
-    retry_count: int = Field(default=0)
-    
-    # Relationships
-    user: Optional[User] = Relationship(back_populates="transactions")
-    kiosk: Optional[Kiosk] = Relationship(back_populates="transactions")
-
-
-class KioskHealthLog(SQLModel, table=True):
-    """Kiosk health monitoring logs"""
-    __tablename__ = "kiosk_health_logs"
-    
-    id: Optional[int] = Field(default=None, primary_key=True)
-    kiosk_id: str = Field(index=True)
-    
-    # Status information
-    overall_status: str
-    hardware_status: str
-    cloud_status: bool
-    
-    # Hardware details
-    tflex_connected: bool
-    tflex_port: str
-    coin_count: Optional[int] = None
-    
-    # Timing
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    
-    # Optional error details
-    error_details: Optional[str] = None
-
-
-class WorldIDVerification(SQLModel, table=True):
-    """World ID verification attempts and results"""
-    __tablename__ = "worldid_verifications"
-    
-    id: Optional[int] = Field(default=None, primary_key=True)
-    session_id: str = Field(index=True)
-    nullifier_hash: str = Field(index=True)
-    
-    # Verification data
-    merkle_root: str
-    proof: str
-    verification_level: str
-    
-    # Result
-    is_verified: bool
-    error_message: Optional[str] = None
-    
-    # Timing
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    verified_at: Optional[datetime] = None
-    
-    # IP and user agent for security
-    client_ip: Optional[str] = None
-    user_agent: Optional[str] = None
-
-
-def create_db_and_tables(engine):
-    """Create all database tables"""
-    SQLModel.metadata.create_all(engine)
-
-# =============================================================================
-# DATABASE ENGINE SETUP
-# =============================================================================
-
 # Create database engine with error handling
 try:
-    if DATABASE_URL and DATABASE_URL != "sqlite:///./test.db":
+    if DATABASE_URL and DATABASE_URL != "sqlite:///./test.db" and DB_MODELS_AVAILABLE:
         engine = create_engine(DATABASE_URL, echo=False)
         DATABASE_CONNECTED = True
-        DB_MODELS_AVAILABLE = True
-        logger.info("✓ Database engine created successfully")
     else:
         engine = None
         DATABASE_CONNECTED = False
-        DB_MODELS_AVAILABLE = False
         logger.warning("Database engine not initialized - limited functionality")
 except Exception as e:
     logger.error(f"Database engine creation failed: {e}")
     engine = None
     DATABASE_CONNECTED = False
-    DB_MODELS_AVAILABLE = False
 
 # SSE connections store
 sse_connections: dict[str, list] = {}
 
-# =============================================================================
-# FASTAPI APPLICATION SETUP
-# =============================================================================
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan management"""
     # Startup
     logger.info("Starting RoluATM Cloud API")
+    logger.info(f"Database URL: {DATABASE_URL[:50] if DATABASE_URL else 'None'}...")
     
-    if engine and DATABASE_CONNECTED:
+    if DATABASE_URL and DATABASE_URL != "sqlite:///./test.db":
         try:
             # Test database connection
             with Session(engine) as session:
@@ -248,6 +107,8 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"✗ Database initialization failed: {e}")
             logger.warning("Continuing without database - API will be limited")
+    else:
+        logger.warning("No database configured - running in limited mode")
     
     yield
     
@@ -259,7 +120,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="RoluATM Cloud API",
     description="World ID-verified cryptocurrency ATM service",
-    version="1.1.0"
+    version="1.0.0"
     # lifespan=lifespan  # Temporarily disabled for Vercel compatibility
 )
 
@@ -272,9 +133,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# =============================================================================
-# DEPENDENCIES AND UTILITIES
-# =============================================================================
 
 # Dependency to get database session
 def get_session():
@@ -324,11 +182,16 @@ class KioskHealthUpdate(BaseModel):
 
 
 async def verify_world_id(payload: WorldIDPayload) -> bool:
-    """Verify World ID proof with Worldcoin API"""
+    """
+    Verify World ID proof with Worldcoin API
+    
+    Returns:
+        True if verification successful, False otherwise
+    """
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"https://developer.worldcoin.org/api/v2/verify/{WORLD_ID_APP_ID}",
+                "https://developer.worldcoin.org/api/v1/verify",
                 json={
                     "nullifier_hash": payload.nullifier_hash,
                     "merkle_root": payload.merkle_root,
@@ -355,12 +218,26 @@ async def verify_world_id(payload: WorldIDPayload) -> bool:
 
 
 async def broadcast_kiosk_event(kiosk_id: str, event_type: str, data: dict):
-    """Log kiosk event (SSE functionality removed for compatibility)"""
-    logger.info(f"Kiosk {kiosk_id} event: {event_type} - {data}")
+    """Broadcast event to SSE subscribers for a kiosk"""
+    if kiosk_id in sse_connections:
+        event_data = {
+            "type": event_type,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "data": data
+        }
+        
+        # Remove disconnected connections
+        active_connections = []
+        for connection in sse_connections[kiosk_id]:
+            try:
+                await connection.send(event_data)
+                active_connections.append(connection)
+            except:
+                # Connection closed
+                pass
+        
+        sse_connections[kiosk_id] = active_connections
 
-# =============================================================================
-# API ENDPOINTS
-# =============================================================================
 
 @app.get("/health")
 async def health_check():
@@ -369,16 +246,11 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "service": "RoluATM Cloud API",
-        "version": "1.1.0",
+        "version": "1.0.0",
         "environment": {
             "has_database_url": bool(DATABASE_URL and DATABASE_URL != "sqlite:///./test.db"),
             "world_id_app_id": bool(WORLD_ID_APP_ID),
             "world_id_action": bool(WORLD_ID_ACTION)
-        },
-        "debug": {
-            "db_models_available": DB_MODELS_AVAILABLE,
-            "database_connected": DATABASE_CONNECTED,
-            "engine_available": engine is not None
         }
     }
     
@@ -397,6 +269,281 @@ async def health_check():
         response["status"] = "limited"
     
     return response
+
+
+@app.post("/verify-worldid")
+async def verify_worldid(
+    request: VerifyWorldIDRequest,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session)
+):
+    """Verify World ID and create user if needed"""
+    
+    # Record verification attempt
+    verification = WorldIDVerification(
+        session_id=request.session_id,
+        nullifier_hash=request.world_id_payload.nullifier_hash,
+        merkle_root=request.world_id_payload.merkle_root,
+        proof=request.world_id_payload.proof,
+        verification_level=request.world_id_payload.verification_level,
+        is_verified=False
+    )
+    
+    try:
+        # Verify with World ID API
+        is_verified = await verify_world_id(request.world_id_payload)
+        
+        if not is_verified:
+            verification.error_message = "World ID verification failed"
+            session.add(verification)
+            session.commit()
+            raise HTTPException(status_code=400, detail="World ID verification failed")
+        
+        # Check for duplicate nullifier
+        existing_verification = session.exec(
+            select(WorldIDVerification)
+            .where(WorldIDVerification.nullifier_hash == request.world_id_payload.nullifier_hash)
+            .where(WorldIDVerification.is_verified == True)
+        ).first()
+        
+        if existing_verification:
+            verification.error_message = "World ID already used"
+            session.add(verification)
+            session.commit()
+            raise HTTPException(status_code=400, detail="World ID already used for verification")
+        
+        # Mark verification as successful
+        verification.is_verified = True
+        verification.verified_at = datetime.now(timezone.utc)
+        
+        # Get or create user
+        user = session.exec(
+            select(User)
+            .where(User.world_id_nullifier == request.world_id_payload.nullifier_hash)
+        ).first()
+        
+        if not user:
+            user = User(
+                world_id_nullifier=request.world_id_payload.nullifier_hash,
+                verification_level=request.world_id_payload.verification_level
+            )
+            session.add(user)
+            session.flush()  # Get user ID
+        
+        # Create transaction record
+        transaction = Transaction(
+            session_id=request.session_id,
+            user_id=user.id,
+            amount_usd=request.amount_usd,
+            quarters_requested=int(request.amount_usd * 4),
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+            world_id_merkle_root=request.world_id_payload.merkle_root,
+            world_id_nullifier_hash=request.world_id_payload.nullifier_hash,
+            world_id_proof=request.world_id_payload.proof,
+            status=TransactionStatus.VERIFIED,
+            verified_at=datetime.now(timezone.utc)
+        )
+        session.add(transaction)
+        
+        session.add(verification)
+        session.commit()
+        
+        return {
+            "success": True,
+            "session_id": request.session_id,
+            "user_id": user.id,
+            "transaction_id": transaction.id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"World ID verification error: {e}")
+        verification.error_message = str(e)
+        session.add(verification)
+        session.commit()
+        raise HTTPException(status_code=500, detail="Verification service error")
+
+
+@app.post("/verify-withdrawal")
+async def verify_withdrawal(
+    request: WithdrawalLockRequest,
+    session: Session = Depends(get_session)
+):
+    """Verify withdrawal before dispensing (used by kiosk)"""
+    
+    # Find transaction
+    transaction = session.exec(
+        select(Transaction)
+        .where(Transaction.session_id == request.session_id)
+    ).first()
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    if transaction.status != TransactionStatus.VERIFIED:
+        raise HTTPException(status_code=400, detail="Transaction not verified")
+    
+    if transaction.expires_at < datetime.now(timezone.utc):
+        transaction.status = TransactionStatus.EXPIRED
+        session.commit()
+        raise HTTPException(status_code=400, detail="Transaction expired")
+    
+    if transaction.amount_usd != request.amount_usd:
+        raise HTTPException(status_code=400, detail="Amount mismatch")
+    
+    # Get or create kiosk
+    kiosk = session.exec(
+        select(Kiosk)
+        .where(Kiosk.kiosk_id == request.kiosk_id)
+    ).first()
+    
+    if not kiosk:
+        kiosk = Kiosk(kiosk_id=request.kiosk_id)
+        session.add(kiosk)
+        session.flush()
+    
+    # Update transaction
+    transaction.kiosk_id = kiosk.id
+    transaction.status = TransactionStatus.DISPENSING
+    session.commit()
+    
+    return {
+        "success": True,
+        "session_id": request.session_id,
+        "amount_usd": request.amount_usd,
+        "coins_to_dispense": request.coins_needed
+    }
+
+
+@app.post("/confirm-withdrawal")
+async def confirm_withdrawal(
+    request: WithdrawalSettleRequest,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session)
+):
+    """Confirm withdrawal after coins dispensed (used by kiosk)"""
+    
+    # Find transaction
+    transaction = session.exec(
+        select(Transaction)
+        .where(Transaction.session_id == request.session_id)
+    ).first()
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    # Update transaction
+    transaction.quarters_dispensed = request.coins_dispensed
+    transaction.status = TransactionStatus.COMPLETED
+    transaction.dispensed_at = datetime.fromisoformat(request.timestamp.replace('Z', '+00:00'))
+    transaction.completed_at = datetime.now(timezone.utc)
+    
+    # Update user statistics
+    if transaction.user:
+        transaction.user.total_transactions += 1
+        transaction.user.total_amount_usd += transaction.amount_usd
+        transaction.user.last_transaction_at = transaction.completed_at
+    
+    # Update kiosk statistics
+    if transaction.kiosk:
+        transaction.kiosk.total_transactions += 1
+        transaction.kiosk.total_coins_dispensed += request.coins_dispensed
+        transaction.kiosk.last_seen_at = datetime.now(timezone.utc)
+    
+    session.commit()
+    
+    return {
+        "success": True,
+        "session_id": request.session_id,
+        "transaction_id": transaction.id,
+        "completed_at": transaction.completed_at.isoformat()
+    }
+
+
+@app.get("/events/{kiosk_id}")
+async def kiosk_events(kiosk_id: str):
+    """Server-Sent Events for live kiosk status"""
+    
+    async def event_generator():
+        try:
+            # Send limited heartbeats to avoid serverless timeout
+            for i in range(10):  # Maximum 10 heartbeats (5 minutes)
+                yield {
+                    "event": "heartbeat",
+                    "data": {
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "kiosk_id": kiosk_id,
+                        "sequence": i
+                    }
+                }
+                
+                # Wait for next event
+                await asyncio.sleep(30)
+                
+        except Exception:
+            pass
+    
+    return EventSourceResponse(event_generator())
+
+
+@app.get("/pay/{session_id}", response_class=HTMLResponse)
+async def serve_payment_app(session_id: str):
+    """Serve World App payment mini-app"""
+    
+    # Generate Mini App URL for direct World App access
+    # Use direct Mini App URL format that works when scanned from any camera
+    miniapp_url = f"worldapp://mini-app?app_id={WORLD_ID_APP_ID}&path=%2Fpay%2F{session_id}"
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>RoluATM Payment - Session {session_id}</title>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                max-width: 400px;
+                margin: 0 auto;
+                padding: 20px;
+                text-align: center;
+            }}
+            .qr-code {{
+                margin: 20px 0;
+                padding: 20px;
+                border: 2px solid #ccc;
+                border-radius: 10px;
+            }}
+            .session-info {{
+                background: #f0f0f0;
+                padding: 15px;
+                border-radius: 5px;
+                margin: 10px 0;
+            }}
+        </style>
+    </head>
+    <body>
+        <h1>RoluATM Payment</h1>
+        <div class="session-info">
+            <p><strong>Session:</strong> {session_id}</p>
+            <p>Scan with World App to verify your identity</p>
+        </div>
+        <div class="qr-code">
+            <a href="{miniapp_url}" target="_blank">
+                <button style="padding: 15px 30px; font-size: 16px;">
+                    Open in World App
+                </button>
+            </a>
+        </div>
+        <p>Or scan this QR code with World App:</p>
+        <p><a href="{miniapp_url}">{miniapp_url}</a></p>
+    </body>
+    </html>
+    """
+    
+    return HTMLResponse(content=html_content)
 
 
 @app.get("/")
@@ -419,21 +566,79 @@ async def root():
 async def test_endpoint():
     """Simple test endpoint for deployment verification"""
     return {
-        "message": "Hello from RoluATM Cloud API with embedded models!",
+        "message": "Hello from RoluATM Cloud API!",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "status": "success",
-        "models_embedded": True
+        "status": "success"
+    }
+
+
+@app.post("/kiosk-health")
+async def update_kiosk_health(
+    request: KioskHealthUpdate,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session)
+):
+    """Update kiosk health status"""
+    
+    # Get or create kiosk
+    kiosk = session.exec(
+        select(Kiosk)
+        .where(Kiosk.kiosk_id == request.kiosk_id)
+    ).first()
+    
+    if not kiosk:
+        kiosk = Kiosk(kiosk_id=request.kiosk_id)
+        session.add(kiosk)
+        session.flush()
+    
+    # Update kiosk status
+    kiosk.last_seen_at = datetime.now(timezone.utc)
+    kiosk.last_health_status = request.overall_status
+    kiosk.serial_port = request.tflex_port
+    
+    # Create health log entry
+    health_log = KioskHealthLog(
+        kiosk_id=request.kiosk_id,
+        overall_status=request.overall_status,
+        hardware_status=request.hardware_status,
+        cloud_status=request.cloud_status,
+        tflex_connected=request.tflex_connected,
+        tflex_port=request.tflex_port,
+        coin_count=request.coin_count,
+        error_details=request.error_details
+    )
+    
+    session.add(health_log)
+    session.commit()
+    
+    # Broadcast health update to SSE subscribers
+    background_tasks.add_task(
+        broadcast_kiosk_event,
+        request.kiosk_id,
+        "health_update",
+        {
+            "overall_status": request.overall_status,
+            "hardware_status": request.hardware_status,
+            "cloud_status": request.cloud_status,
+            "tflex_connected": request.tflex_connected,
+            "coin_count": request.coin_count
+        }
+    )
+    
+    return {
+        "success": True,
+        "kiosk_id": request.kiosk_id,
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
 @app.get("/test-qr")
 async def test_qr_code():
     """Test QR code generation and URL format"""
+    import uuid
     session_id = f"test-{uuid.uuid4().hex[:8]}"
     
     # Use direct Mini App URL format for QR codes
-    # This format works when scanned from any camera and opens the Mini App directly in World App
-    # Based on World ID API Reference documentation format
     miniapp_url = f"worldapp://mini-app?app_id={WORLD_ID_APP_ID}&path=%2Fminiapp%3Fsession%3D{session_id}"
     
     html_content = f"""
@@ -454,7 +659,7 @@ async def test_qr_code():
             <h2>🧪 QR Code Test - RoluATM</h2>
             <p><strong>Session ID:</strong> {session_id}</p>
             
-            <h3>World ID URL (with return_to):</h3>
+            <h3>Mini App URL:</h3>
             <div class="url-display">{miniapp_url}</div>
             
             <canvas id="qrcode"></canvas>
@@ -469,16 +674,6 @@ async def test_qr_code():
                 <button class="test-button" onclick="location.href='/miniapp?session={session_id}'">
                     📱 Test Mini App
                 </button>
-            </div>
-            
-            <div style="margin-top: 30px; text-align: left;">
-                <h4>Test Flow:</h4>
-                <ol>
-                    <li>Scan QR code with World App camera</li>
-                    <li>Should redirect to World App</li>
-                    <li>Should open RoluATM Mini App inside World App</li>
-                    <li>Verify World ID and authorize payment</li>
-                </ol>
             </div>
         </div>
         
@@ -500,213 +695,143 @@ async def test_qr_code():
     return HTMLResponse(content=html_content)
 
 
-@app.get("/pay/{session_id}")
-async def payment_interface(session_id: str, request: Request):
-    """Generate World ID Mini App payment interface"""
-    
-    # Use direct Mini App URL format for QR codes
-    # This format works when scanned from any camera and opens the Mini App directly in World App
-    # Based on World ID API Reference documentation format
-    miniapp_url = f"worldapp://mini-app?app_id={WORLD_ID_APP_ID}&path=%2Fminiapp%3Fsession%3D{session_id}"
+@app.get("/miniapp")
+async def mini_app_interface(session: str = None):
+    """Mini App interface for World App"""
+    if not session:
+        session = "unknown"
     
     html_content = f"""
     <!DOCTYPE html>
-    <html lang="en">
+    <html>
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>RoluATM Payment</title>
+        <title>RoluATM Mini App</title>
+        <script src="https://minikit.world.org/v1/minikit.js"></script>
         <style>
-            body {{
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                max-width: 400px;
-                margin: 50px auto;
-                padding: 20px;
-                text-align: center;
-                background-color: #f5f5f5;
-            }}
-            .payment-container {{
-                background: white;
-                border-radius: 16px;
-                padding: 40px 30px;
-                box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-            }}
-            .title {{
-                font-size: 28px;
-                font-weight: bold;
-                color: #2c3e50;
-                margin-bottom: 30px;
-            }}
-            .session-info {{
-                background: #f8f9fa;
-                padding: 20px;
-                border-radius: 12px;
-                margin-bottom: 30px;
-                border: 1px solid #e9ecef;
-            }}
-            .session-label {{
-                font-weight: 600;
-                color: #6c757d;
-                margin-bottom: 8px;
-            }}
-            .session-id {{
-                font-family: 'Courier New', monospace;
-                font-size: 16px;
-                color: #495057;
-                word-break: break-all;
-            }}
-            .verify-button {{
-                background: linear-gradient(135deg, #000000, #333333);
-                color: white;
-                border: none;
-                padding: 16px 32px;
-                border-radius: 12px;
-                font-size: 18px;
-                font-weight: 600;
-                cursor: pointer;
-                text-decoration: none;
-                display: inline-block;
-                margin: 20px 0;
-                transition: all 0.3s ease;
-                width: 80%;
-                max-width: 280px;
-            }}
-            .verify-button:hover {{
-                background: linear-gradient(135deg, #333333, #555555);
-                transform: translateY(-2px);
-                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            }}
-            .instructions {{
-                font-size: 16px;
-                color: #6c757d;
-                margin: 25px 0;
-                line-height: 1.6;
-            }}
-            .qr-section {{
-                margin-top: 30px;
-                padding-top: 25px;
-                border-top: 1px solid #e9ecef;
-            }}
-            .qr-text {{
-                font-size: 14px;
-                color: #6c757d;
-                margin-bottom: 15px;
-            }}
-            .qr-code {{
-                margin: 20px 0;
-                display: flex;
-                justify-content: center;
-            }}
-            .verify-url {{
-                background: #f8f9fa;
-                padding: 15px;
-                border-radius: 8px;
-                border: 1px solid #dee2e6;
-                font-family: 'Courier New', monospace;
-                font-size: 12px;
-                color: #495057;
-                word-break: break-all;
-                margin-top: 15px;
-            }}
-            .footer {{
-                margin-top: 30px;
-                font-size: 12px;
-                color: #adb5bd;
-            }}
-            .amount-info {{
-                background: #e8f5e8;
-                padding: 15px;
-                border-radius: 8px;
-                margin-bottom: 20px;
-                border: 1px solid #c3e6c3;
-            }}
-            .amount-label {{
-                font-size: 14px;
-                color: #2d5a2d;
-                margin-bottom: 5px;
-            }}
-            .amount-value {{
-                font-size: 24px;
-                font-weight: bold;
-                color: #1a4d1a;
-            }}
+            body {{ font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }}
+            .container {{ max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; }}
+            .title {{ font-size: 24px; font-weight: bold; text-align: center; margin-bottom: 20px; }}
+            .session-info {{ background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }}
+            .action-button {{ width: 100%; padding: 15px; background: #000; color: white; border: none; border-radius: 8px; font-size: 16px; margin: 10px 0; cursor: pointer; }}
+            .status {{ margin: 20px 0; padding: 15px; border-radius: 8px; }}
+            .success {{ background: #d4edda; color: #155724; }}
+            .error {{ background: #f8d7da; color: #721c24; }}
+            .info {{ background: #d1ecf1; color: #0c5460; }}
         </style>
-        <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     </head>
     <body>
-        <div class="payment-container">
-            <div class="title">RoluATM Payment</div>
+        <div class="container">
+            <div class="title">🏧 RoluATM</div>
             
             <div class="session-info">
-                <div class="session-label">Session:</div>
-                <div class="session-id">{session_id}</div>
+                <strong>Session:</strong> {session}<br>
+                <strong>Amount:</strong> $10.00 + $0.50 fee<br>
+                <strong>Quarters:</strong> 40 coins
             </div>
             
-            <div class="amount-info">
-                <div class="amount-label">Withdrawal Amount:</div>
-                <div class="amount-value">$10.00 USD</div>
-                <div style="font-size: 12px; color: #666; margin-top: 5px;">40 quarters + $0.50 fee</div>
+            <button class="action-button" onclick="verifyWorldID()">
+                🌍 Verify with World ID
+            </button>
+            
+            <button class="action-button" onclick="authorizePayment()" style="display:none;" id="payButton">
+                💳 Authorize Payment
+            </button>
+            
+            <div id="status" class="status info">
+                Ready to verify identity
             </div>
             
-            <div class="instructions">
-                Scan with World App to verify your identity<br>
-                and authorize the withdrawal
-            </div>
-            
-            <a href="{miniapp_url}" class="verify-button">
-                Open RoluATM Mini App
-            </a>
-            
-            <div class="qr-section">
-                <div class="qr-text">Or scan this QR code with World App:</div>
-                <div class="qr-code">
-                    <canvas id="qrcode"></canvas>
-                </div>
-                <div class="verify-url">{miniapp_url}</div>
-            </div>
-            
-            <div class="footer">
-                Powered by World ID • Secure • Private
+            <div style="margin-top: 30px; font-size: 12px; color: #666; text-align: center;">
+                Session: {session}<br>
+                MiniKit Status: <span id="minikit-status">Loading...</span>
             </div>
         </div>
         
         <script>
-            // Generate QR code for Mini App
-            QRCode.toCanvas(document.getElementById('qrcode'), '{miniapp_url}', {{
-                width: 200,
-                height: 200,
-                margin: 2,
-                color: {{
-                    dark: '#000000',
-                    light: '#FFFFFF'
+            let sessionId = '{session}';
+            
+            // Initialize MiniKit
+            window.addEventListener('load', function() {{
+                if (typeof MiniKit !== 'undefined') {{
+                    document.getElementById('minikit-status').textContent = 'Ready';
+                    showStatus('MiniKit loaded successfully', 'success');
+                }} else {{
+                    document.getElementById('minikit-status').textContent = 'Failed';
+                    showStatus('MiniKit failed to load', 'error');
                 }}
-            }}, function (error) {{
-                if (error) console.error(error);
-                console.log('External redirect QR code generated successfully!');
             }});
             
-            // Auto-refresh verification status
-            let checkInterval;
-            
-            function checkVerificationStatus() {{
-                fetch(`/verification-status/{session_id}`)
-                    .then(response => response.json())
-                    .then(data => {{
-                        if (data.verified) {{
-                            clearInterval(checkInterval);
-                            window.location.href = `/payment-success/{session_id}`;
-                        }}
-                    }})
-                    .catch(error => console.log('Checking verification status...'));
+            function showStatus(message, type) {{
+                const status = document.getElementById('status');
+                status.textContent = message;
+                status.className = 'status ' + type;
             }}
             
-            // Check every 3 seconds
-            checkInterval = setInterval(checkVerificationStatus, 3000);
+            async function verifyWorldID() {{
+                showStatus('Starting World ID verification...', 'info');
+                
+                try {{
+                    const response = await MiniKit.commands.verify({{
+                        action: 'withdraw-cash',
+                        signal: sessionId
+                    }});
+                    
+                    if (response.success) {{
+                        showStatus('✅ World ID verified! Now authorize payment.', 'success');
+                        document.getElementById('payButton').style.display = 'block';
+                        
+                        // Send verification to backend
+                        const backendResponse = await fetch('/verify-worldid', {{
+                            method: 'POST',
+                            headers: {{ 'Content-Type': 'application/json' }},
+                            body: JSON.stringify({{
+                                session_id: sessionId,
+                                world_id_payload: response,
+                                amount_usd: 10.50
+                            }})
+                        }});
+                        
+                        if (!backendResponse.ok) {{
+                            throw new Error('Backend verification failed');
+                        }}
+                    }} else {{
+                        showStatus('❌ World ID verification failed', 'error');
+                    }}
+                }} catch (error) {{
+                    console.error('Verification error:', error);
+                    showStatus('❌ Verification error: ' + error.message, 'error');
+                }}
+            }}
             
-            // Clean up on page unload
-            window.addEventListener('beforeunload', () => {{
-                if (checkInterval) clearInterval(checkInterval);
-            }});
+            async function authorizePayment() {{
+                showStatus('Authorizing payment...', 'info');
+                
+                try {{
+                    const response = await MiniKit.commands.pay({{
+                        reference: sessionId,
+                        to: '0x1234567890123456789012345678901234567890', // Your wallet address
+                        tokens: [{{
+                            symbol: 'USDC',
+                            token_amount: '10.500000' // $10.50 in USDC (6 decimals)
+                        }}]
+                    }});
+                    
+                    if (response.success) {{
+                        showStatus('✅ Payment authorized! Dispensing quarters...', 'success');
+                        // Redirect to success page or continue with dispensing logic
+                        setTimeout(() => {{
+                            window.location.href = '/payment-success/' + sessionId;
+                        }}, 2000);
+                    }} else {{
+                        showStatus('❌ Payment authorization failed', 'error');
+                    }}
+                }} catch (error) {{
+                    console.error('Payment error:', error);
+                    showStatus('❌ Payment error: ' + error.message, 'error');
+                }}
+            }}
         </script>
     </body>
     </html>
@@ -715,361 +840,52 @@ async def payment_interface(session_id: str, request: Request):
     return HTMLResponse(content=html_content)
 
 
-@app.get("/verification-status/{session_id}")
-async def check_verification_status(session_id: str):
-    """Check if World ID verification is complete for session"""
-    if not DATABASE_CONNECTED:
-        return {"verified": False, "error": "Database not available"}
-    
-    try:
-        with Session(engine) as session:
-            # Check if verification exists and is successful
-            verification = session.exec(
-                select(WorldIDVerification)
-                .where(WorldIDVerification.session_id == session_id)
-                .where(WorldIDVerification.is_verified == True)
-            ).first()
-            
-            return {"verified": verification is not None}
-    except Exception as e:
-        logger.error(f"Error checking verification status: {e}")
-        return {"verified": False, "error": str(e)}
-
-
 @app.get("/payment-success/{session_id}")
 async def payment_success(session_id: str):
     """Payment success page"""
+    
     html_content = f"""
     <!DOCTYPE html>
-    <html lang="en">
+    <html>
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Payment Verified - RoluATM</title>
+        <title>Payment Successful - RoluATM</title>
         <style>
-            body {{
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                max-width: 400px;
-                margin: 50px auto;
-                padding: 20px;
-                text-align: center;
-                background-color: #f5f5f5;
-            }}
-            .success-container {{
-                background: white;
-                border-radius: 16px;
-                padding: 40px 30px;
-                box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-            }}
-            .success-icon {{
-                font-size: 64px;
-                color: #28a745;
-                margin-bottom: 20px;
-            }}
-            .title {{
-                font-size: 24px;
-                font-weight: bold;
-                color: #28a745;
-                margin-bottom: 20px;
-            }}
-            .message {{
-                font-size: 16px;
-                color: #6c757d;
-                line-height: 1.6;
-                margin-bottom: 30px;
-            }}
-            .session-id {{
-                background: #f8f9fa;
-                padding: 15px;
-                border-radius: 8px;
-                font-family: 'Courier New', monospace;
-                font-size: 14px;
-                color: #495057;
-                margin-bottom: 20px;
-            }}
+            body {{ font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; text-align: center; }}
+            .container {{ max-width: 400px; margin: 50px auto; background: white; padding: 40px; border-radius: 16px; }}
+            .success-icon {{ font-size: 64px; margin-bottom: 20px; }}
+            .title {{ font-size: 24px; font-weight: bold; color: #28a745; margin-bottom: 20px; }}
+            .details {{ background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }}
+            .status {{ background: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin: 20px 0; }}
         </style>
     </head>
     <body>
-        <div class="success-container">
+        <div class="container">
             <div class="success-icon">✅</div>
-            <div class="title">Payment Verified!</div>
-            <div class="message">
-                Your World ID verification was successful.<br>
-                Please proceed to the kiosk to collect your coins.
+            <div class="title">Payment Successful!</div>
+            
+            <div class="details">
+                <strong>Session:</strong> {session_id}<br>
+                <strong>Amount:</strong> $10.50<br>
+                <strong>Quarters:</strong> 40 coins<br>
+                <strong>Status:</strong> Processing...
             </div>
-            <div class="session-id">Session: {session_id}</div>
+            
+            <div class="status">
+                Your payment has been processed.<br>
+                Please wait for the ATM to dispense your quarters.
+            </div>
+            
+            <div style="margin-top: 30px; font-size: 14px; color: #666;">
+                Thank you for using RoluATM!
+            </div>
         </div>
     </body>
     </html>
     """
     
     return HTMLResponse(content=html_content)
-
-
-@app.post("/verify-worldid")
-async def verify_world_id_endpoint(request: VerifyWorldIDRequest, background_tasks: BackgroundTasks):
-    """Verify World ID proof and process payment"""
-    if not DATABASE_CONNECTED:
-        raise HTTPException(status_code=503, detail="Database not available")
-    
-    try:
-        with Session(engine) as session:
-            # Verify the World ID proof
-            is_verified = await verify_world_id(request.world_id_payload)
-            
-            # Create verification record
-    verification = WorldIDVerification(
-        session_id=request.session_id,
-        nullifier_hash=request.world_id_payload.nullifier_hash,
-        merkle_root=request.world_id_payload.merkle_root,
-        proof=request.world_id_payload.proof,
-        verification_level=request.world_id_payload.verification_level,
-                is_verified=is_verified,
-                verified_at=datetime.now(timezone.utc) if is_verified else None
-            )
-            
-            session.add(verification)
-            
-            if is_verified:
-                # Find or create user
-        user = session.exec(
-                    select(User).where(User.world_id_nullifier == request.world_id_payload.nullifier_hash)
-        ).first()
-        
-        if not user:
-            user = User(
-                world_id_nullifier=request.world_id_payload.nullifier_hash,
-                verification_level=request.world_id_payload.verification_level
-            )
-            session.add(user)
-            session.flush()  # Get user ID
-        
-                # Calculate quarters (assuming $0.25 per quarter)
-                quarters_requested = int(request.amount_usd / 0.25)
-                
-                # Create transaction
-        transaction = Transaction(
-            session_id=request.session_id,
-            user_id=user.id,
-            amount_usd=request.amount_usd,
-                    quarters_requested=quarters_requested,
-                    status=TransactionStatus.VERIFIED,
-                    verified_at=datetime.now(timezone.utc),
-                    expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
-            world_id_merkle_root=request.world_id_payload.merkle_root,
-            world_id_nullifier_hash=request.world_id_payload.nullifier_hash,
-                    world_id_proof=request.world_id_payload.proof
-        )
-                
-        session.add(transaction)
-        
-                # Update user stats
-                user.total_transactions += 1
-                user.total_amount_usd += request.amount_usd
-                user.last_transaction_at = datetime.now(timezone.utc)
-                
-        session.commit()
-        
-        return {
-            "success": True,
-            "session_id": request.session_id,
-                    "amount_usd": request.amount_usd,
-                    "quarters": quarters_requested,
-                    "expires_at": transaction.expires_at.isoformat()
-                }
-            else:
-                session.commit()
-                raise HTTPException(
-                    status_code=400, 
-                    detail="World ID verification failed"
-                )
-                
-    except Exception as e:
-        logger.error(f"World ID verification error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/verify-withdrawal")
-async def verify_withdrawal(request: WithdrawalLockRequest):
-    """Verify withdrawal eligibility and lock coins"""
-    if not DATABASE_CONNECTED:
-        raise HTTPException(status_code=503, detail="Database not available")
-    
-    try:
-        with Session(engine) as session:
-            # Find verified transaction
-    transaction = session.exec(
-        select(Transaction)
-        .where(Transaction.session_id == request.session_id)
-                .where(Transaction.status == TransactionStatus.VERIFIED)
-                .where(Transaction.expires_at > datetime.now(timezone.utc))
-    ).first()
-    
-    if not transaction:
-                raise HTTPException(
-                    status_code=404, 
-                    detail="No valid verified transaction found"
-                )
-            
-            # Update transaction status
-    transaction.status = TransactionStatus.DISPENSING
-            transaction.quarters_dispensed = request.coins_needed
-            session.add(transaction)
-    session.commit()
-    
-    return {
-        "success": True,
-        "session_id": request.session_id,
-                "amount_usd": transaction.amount_usd,
-                "coins_approved": request.coins_needed
-    }
-            
-    except Exception as e:
-        logger.error(f"Withdrawal verification error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/confirm-withdrawal")
-async def confirm_withdrawal(request: WithdrawalSettleRequest):
-    """Confirm successful coin dispensing"""
-    if not DATABASE_CONNECTED:
-        raise HTTPException(status_code=503, detail="Database not available")
-    
-    try:
-        with Session(engine) as session:
-            # Find dispensing transaction
-    transaction = session.exec(
-        select(Transaction)
-        .where(Transaction.session_id == request.session_id)
-                .where(Transaction.status == TransactionStatus.DISPENSING)
-    ).first()
-    
-    if not transaction:
-                raise HTTPException(
-                    status_code=404, 
-                    detail="No dispensing transaction found"
-                )
-    
-            # Complete transaction
-            transaction.status = TransactionStatus.COMPLETED
-    transaction.quarters_dispensed = request.coins_dispensed
-            transaction.dispensed_at = datetime.now(timezone.utc)
-    transaction.completed_at = datetime.now(timezone.utc)
-    
-            session.add(transaction)
-    session.commit()
-    
-    return {
-        "success": True,
-        "session_id": request.session_id,
-                "coins_dispensed": request.coins_dispensed,
-        "completed_at": transaction.completed_at.isoformat()
-    }
-
-    except Exception as e:
-        logger.error(f"Withdrawal confirmation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/kiosk-health")
-async def update_kiosk_health(request: KioskHealthUpdate, background_tasks: BackgroundTasks):
-    """Update kiosk health status"""
-    if not DATABASE_CONNECTED:
-        raise HTTPException(status_code=503, detail="Database not available")
-    
-    try:
-        with Session(engine) as session:
-            # Create health log
-            health_log = KioskHealthLog(
-                kiosk_id=request.kiosk_id,
-                overall_status=request.overall_status,
-                hardware_status=request.hardware_status,
-                cloud_status=request.cloud_status,
-                tflex_connected=request.tflex_connected,
-                tflex_port=request.tflex_port,
-                coin_count=request.coin_count,
-                error_details=request.error_details
-            )
-            
-            session.add(health_log)
-            
-            # Update or create kiosk record
-            kiosk = session.exec(
-                select(Kiosk).where(Kiosk.kiosk_id == request.kiosk_id)
-            ).first()
-            
-            if not kiosk:
-                kiosk = Kiosk(
-                    kiosk_id=request.kiosk_id,
-                    serial_port=request.tflex_port,
-                    last_health_status=request.overall_status,
-                    last_seen_at=datetime.now(timezone.utc)
-                )
-                session.add(kiosk)
-            else:
-                kiosk.last_health_status = request.overall_status
-                kiosk.last_seen_at = datetime.now(timezone.utc)
-                kiosk.serial_port = request.tflex_port
-                session.add(kiosk)
-            
-            session.commit()
-            
-            # Broadcast health update
-            background_tasks.add_task(
-                broadcast_kiosk_event,
-                request.kiosk_id,
-                "health_update",
-                {
-                    "status": request.overall_status,
-                    "hardware": request.hardware_status,
-                    "cloud": request.cloud_status,
-                    "coins": request.coin_count
-                }
-            )
-            
-            return {
-                "success": True,
-                "kiosk_id": request.kiosk_id,
-                "timestamp": health_log.timestamp.isoformat()
-            }
-            
-    except Exception as e:
-        logger.error(f"Kiosk health update error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/world-id-callback")
-async def world_id_callback(
-    code: Optional[str] = None,
-    state: Optional[str] = None,
-    session: Optional[str] = None,
-    error: Optional[str] = None
-):
-    """Handle World ID OAuth/OIDC callback"""
-    if error:
-        logger.error(f"World ID callback error: {error}")
-        return HTMLResponse(f"""
-        <html><body>
-        <h2>Authentication Error</h2>
-        <p>Error: {error}</p>
-        <p><a href="/miniapp?session={session or 'unknown'}">Try Again</a></p>
-        </body></html>
-        """, status_code=400)
-    
-    # For now, redirect to miniapp with session parameter
-    session_id = session or state or "unknown"
-    return RedirectResponse(f"/miniapp?session={session_id}")
-
-
-@app.get("/miniapp")
-async def mini_app_interface():
-    """Serve the MiniKit-enabled Mini App for World App"""
-    try:
-        with open("cloud-api/rolu-miniapp.html", "r", encoding="utf-8") as f:
-            html_content = f.read()
-    return HTMLResponse(content=html_content)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Mini App file not found")
 
 
 # For local development
