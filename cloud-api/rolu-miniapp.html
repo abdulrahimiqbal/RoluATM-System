@@ -189,14 +189,20 @@
     </div>
 
     <script>
-        // IMMEDIATE DEBUG - Run before anything else
-        document.addEventListener('DOMContentLoaded', function() {
-            // Force create console output if it doesn't exist
-            let consoleOutput = document.getElementById('console-output');
-            if (!consoleOutput) {
-                consoleOutput = document.createElement('div');
-                consoleOutput.id = 'console-output';
-                consoleOutput.style.cssText = 'background: #000; color: #0f0; padding: 10px; margin: 10px 0; font-family: monospace; font-size: 10px; max-height: 300px; overflow-y: auto; border-radius: 5px; border: 2px solid #0f0;';
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('=== DOM CONTENT LOADED ===');
+            console.log('RoluATM initializing...');
+            
+            // Create aggressive on-page debugging console
+            if (!document.getElementById('debug-console')) {
+                const consoleOutput = document.createElement('div');
+                consoleOutput.id = 'debug-console';
+                consoleOutput.style.cssText = `
+                    position: fixed; top: 0; left: 0; right: 0; 
+                    background: #000; color: #0f0; font-family: monospace; 
+                    font-size: 12px; padding: 10px; max-height: 200px; 
+                    overflow-y: auto; z-index: 9999; border-bottom: 2px solid #0f0;
+                `;
                 document.querySelector('.container').appendChild(consoleOutput);
             }
             
@@ -274,8 +280,68 @@
                     }
                 });
                 
+                // Try to load MiniKit dynamically if not found
+                if (!foundMiniKit) {
+                    console.log('⚠️ MiniKit not found, trying to load dynamically...');
+                    
+                    try {
+                        // Try to load MiniKit script dynamically
+                        const script = document.createElement('script');
+                        script.src = 'https://cdn.jsdelivr.net/npm/@worldcoin/minikit-js@latest/dist/minikit.js';
+                        
+                        const loadPromise = new Promise((resolve, reject) => {
+                            script.onload = () => {
+                                console.log('✅ MiniKit script loaded dynamically');
+                                console.log('window.MiniKit after dynamic load:', window.MiniKit);
+                                if (window.MiniKit) {
+                                    foundMiniKit = window.MiniKit;
+                                    resolve(window.MiniKit);
+                                } else {
+                                    reject(new Error('MiniKit still not available after script load'));
+                                }
+                            };
+                            script.onerror = (error) => {
+                                console.error('❌ Failed to load MiniKit script:', error);
+                                reject(error);
+                            };
+                        });
+                        
+                        document.head.appendChild(script);
+                        
+                        // Wait for script to load with timeout
+                        const timeoutPromise = new Promise((_, reject) => {
+                            setTimeout(() => reject(new Error('MiniKit load timeout')), 5000);
+                        });
+                        
+                        try {
+                            await Promise.race([loadPromise, timeoutPromise]);
+                        } catch (error) {
+                            console.error('Failed to load MiniKit dynamically:', error);
+                        }
+                    } catch (error) {
+                        console.error('Error loading MiniKit:', error);
+                    }
+                }
+                
                 if (foundMiniKit && foundMiniKit.commandsAsync) {
                     console.log('✅ MiniKit.commandsAsync found!');
+                    
+                    // Try to install/initialize MiniKit
+                    try {
+                        if (foundMiniKit.install) {
+                            console.log('Installing MiniKit with appId:', APP_CONFIG.appId);
+                            foundMiniKit.install(APP_CONFIG.appId);
+                            console.log('✅ MiniKit installed successfully');
+                        }
+                        
+                        if (foundMiniKit.isInstalled && !foundMiniKit.isInstalled()) {
+                            console.log('⚠️ MiniKit not installed, trying to install...');
+                            foundMiniKit.install(APP_CONFIG.appId);
+                        }
+                    } catch (error) {
+                        console.log('MiniKit install error (may be normal):', error.message);
+                    }
+                    
                     setButtonState('Withdraw $10.50', false);
                     showStatus('Ready to withdraw. Click to verify with World ID.', 'success');
                     
