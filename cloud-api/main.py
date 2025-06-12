@@ -425,6 +425,17 @@ async def test_endpoint():
     }
 
 
+@app.get("/test-qr")
+async def test_qr_code():
+    """Test QR code generation"""
+    try:
+        with open("cloud-api/test-qr.html", "r", encoding="utf-8") as f:
+            html_content = f.read()
+        return HTMLResponse(content=html_content)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Test QR file not found")
+
+
 @app.get("/pay/{session_id}")
 async def payment_interface(session_id: str, request: Request):
     """Generate World ID Mini App payment interface"""

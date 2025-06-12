@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>QR Code Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+</head>
+<body>
+    <h1>QR Code Test</h1>
+    <canvas id="qrcode"></canvas>
+    <p id="status">Loading...</p>
+    
+    <script>
+        console.log('QRCode library loaded:', typeof QRCode);
+        
+        const testUrl = 'https://worldcoin.org/verify?app_id=app_263013ca6f702add37ad338fa43d4307&action=withdraw-cash&signal=test-123';
+        
+        document.getElementById('status').textContent = 'Generating QR code...';
+        
+        try {
+            QRCode.toCanvas(document.getElementById('qrcode'), testUrl, {
+                width: 200,
+                height: 200,
+                margin: 2,
+                color: {
+                    dark: '#000000',
+                    light: '#FFFFFF'
+                }
+            }, function (error) {
+                if (error) {
+                    console.error('QR Code generation failed:', error);
+                    document.getElementById('status').textContent = 'Error: ' + error.message;
+                } else {
+                    console.log('QR code generated successfully!');
+                    document.getElementById('status').textContent = 'QR code generated successfully!';
+                }
+            });
+        } catch (e) {
+            console.error('QR Code generation error:', e);
+            document.getElementById('status').textContent = 'JavaScript Error: ' + e.message;
+        }
+    </script>
+</body>
+</html> 
