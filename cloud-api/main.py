@@ -7,7 +7,6 @@ Database models embedded to avoid import issues in serverless environment.
 
 import os
 import logging
-import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
@@ -15,9 +14,9 @@ from enum import Enum
 import json
 
 import httpx
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request, StreamingResponse
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from sqlmodel import Field, SQLModel, Relationship, Session, create_engine, select
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -355,24 +354,8 @@ async def verify_world_id(payload: WorldIDPayload) -> bool:
 
 
 async def broadcast_kiosk_event(kiosk_id: str, event_type: str, data: dict):
-    """Broadcast event to SSE subscribers for a kiosk"""
-    if kiosk_id in sse_connections:
-        event_data = {
-            "event": event_type,
-            "data": data,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-        
-        active_connections = []
-        for connection in sse_connections[kiosk_id]:
-            try:
-                await connection.send(event_data)
-                active_connections.append(connection)
-            except:
-                # Connection closed
-                pass
-        
-        sse_connections[kiosk_id] = active_connections
+    """Log kiosk event (SSE functionality removed for compatibility)"""
+    logger.info(f"Kiosk {kiosk_id} event: {event_type} - {data}")
 
 # =============================================================================
 # API ENDPOINTS
@@ -534,6 +517,11 @@ async def payment_interface(session_id: str, request: Request):
                 color: #6c757d;
                 margin-bottom: 15px;
             }}
+            .qr-code {{
+                margin: 20px 0;
+                display: flex;
+                justify-content: center;
+            }}
             .verify-url {{
                 background: #f8f9fa;
                 padding: 15px;
@@ -551,6 +539,7 @@ async def payment_interface(session_id: str, request: Request):
                 color: #adb5bd;
             }}
         </style>
+        <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     </head>
     <body>
         <div class="payment-container">
@@ -570,7 +559,10 @@ async def payment_interface(session_id: str, request: Request):
             </a>
             
             <div class="qr-section">
-                <div class="qr-text">Or scan this URL with World App:</div>
+                <div class="qr-text">Or scan this QR code with World App:</div>
+                <div class="qr-code">
+                    <canvas id="qrcode"></canvas>
+                </div>
                 <div class="verify-url">{world_id_verify_url}</div>
             </div>
             
@@ -580,6 +572,20 @@ async def payment_interface(session_id: str, request: Request):
         </div>
         
         <script>
+            // Generate QR code
+            QRCode.toCanvas(document.getElementById('qrcode'), '{world_id_verify_url}', {{
+                width: 200,
+                height: 200,
+                margin: 2,
+                color: {{
+                    dark: '#000000',
+                    light: '#FFFFFF'
+                }}
+            }}, function (error) {{
+                if (error) console.error(error);
+                console.log('QR code generated successfully!');
+            }});
+            
             // Auto-refresh verification status
             let checkInterval;
             
@@ -932,83 +938,6 @@ async def update_kiosk_health(request: KioskHealthUpdate, background_tasks: Back
         logger.error(f"Kiosk health update error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# SSE connections storage
-sse_connections: dict = {}
-
-class SSEConnection:
-    def __init__(self, response):
-        self.response = response
-        self.active = True
-    
-    async def send(self, data):
-        if not self.active:
-            return
-        
-        try:
-            formatted_data = f"event: {data.get('event', 'message')}\ndata: {json.dumps(data.get('data', {}))}\n\n"
-            await self.response.send({"type": "http.response.body", "body": formatted_data.encode()})
-        except:
-            self.active = False
-
-
-@app.get("/events/{kiosk_id}")
-async def stream_kiosk_events(kiosk_id: str, request: Request):
-    """Server-Sent Events stream for kiosk updates"""
-    
-    async def event_generator():
-        # Initialize connection
-        if kiosk_id not in sse_connections:
-            sse_connections[kiosk_id] = []
-        
-        connection = SSEConnection(None)  # Will be set later
-        sse_connections[kiosk_id].append(connection)
-        
-        sequence = 0
-        try:
-            while True:
-                # Check if client disconnected
-                if await request.is_disconnected():
-                    break
-                
-                # Send heartbeat
-                event_data = {
-                    "event": "heartbeat",
-                    "data": {
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                        "kiosk_id": kiosk_id,
-                        "sequence": sequence
-                    }
-                }
-                
-                yield f"event: heartbeat\ndata: {json.dumps(event_data['data'])}\n\n"
-                
-                # Send ping comment every 15 seconds
-                yield f": ping - {datetime.now()}\n\n"
-                
-                sequence += 1
-                await asyncio.sleep(15)
-                
-        except asyncio.CancelledError:
-            pass
-        finally:
-            # Clean up connection
-            if kiosk_id in sse_connections:
-                try:
-                    sse_connections[kiosk_id].remove(connection)
-                except ValueError:
-                    pass
-    
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Cache-Control"
-        }
-    )
 
 # For local development
 if __name__ == "__main__":
