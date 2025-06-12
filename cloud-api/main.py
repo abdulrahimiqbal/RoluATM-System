@@ -431,8 +431,10 @@ async def test_qr_code():
     """Test QR code generation and URL format"""
     session_id = f"test-{uuid.uuid4().hex[:8]}"
     
-    # Updated URL format with return_to parameter (required by World ID docs)
-    world_id_url = f"https://worldcoin.org/verify?app_id={WORLD_ID_APP_ID}&action={WORLD_ID_ACTION}&signal={session_id}&return_to=https://rolu-atm-system.vercel.app/miniapp?session={session_id}"
+    # Use direct Mini App URL format for QR codes
+    # This format works when scanned from any camera and opens the Mini App directly in World App
+    # Based on World ID API Reference documentation format
+    miniapp_url = f"worldapp://mini-app?app_id={WORLD_ID_APP_ID}&path=%2Fminiapp%3Fsession%3D{session_id}"
     
     html_content = f"""
     <!DOCTYPE html>
@@ -453,12 +455,12 @@ async def test_qr_code():
             <p><strong>Session ID:</strong> {session_id}</p>
             
             <h3>World ID URL (with return_to):</h3>
-            <div class="url-display">{world_id_url}</div>
+            <div class="url-display">{miniapp_url}</div>
             
             <canvas id="qrcode"></canvas>
             
             <div style="margin-top: 30px;">
-                <button class="test-button" onclick="window.open('{world_id_url}', '_blank')">
+                <button class="test-button" onclick="window.open('{miniapp_url}', '_blank')">
                     🔗 Test Direct Link
                 </button>
                 <button class="test-button" onclick="location.href='/pay/{session_id}'">
@@ -482,7 +484,7 @@ async def test_qr_code():
         
         <script>
             // Generate QR code
-            QRCode.toCanvas(document.getElementById('qrcode'), '{world_id_url}', {{
+            QRCode.toCanvas(document.getElementById('qrcode'), '{miniapp_url}', {{
                 width: 256,
                 height: 256,
                 margin: 2
@@ -502,10 +504,10 @@ async def test_qr_code():
 async def payment_interface(session_id: str, request: Request):
     """Generate World ID Mini App payment interface"""
     
-    # For external QR codes, use the External Integration format that redirects to Mini App
-    # This format works when scanned from any camera/browser and redirects to World App
-    # According to World ID docs, we need return_to parameter for proper redirection
-    external_redirect_url = f"https://worldcoin.org/verify?app_id={WORLD_ID_APP_ID}&action={WORLD_ID_ACTION}&signal={session_id}&return_to=https://rolu-atm-system.vercel.app/miniapp?session={session_id}"
+    # Use direct Mini App URL format for QR codes
+    # This format works when scanned from any camera and opens the Mini App directly in World App
+    # Based on World ID API Reference documentation format
+    miniapp_url = f"worldapp://mini-app?app_id={WORLD_ID_APP_ID}&path=%2Fminiapp%3Fsession%3D{session_id}"
     
     html_content = f"""
     <!DOCTYPE html>
@@ -651,7 +653,7 @@ async def payment_interface(session_id: str, request: Request):
                 and authorize the withdrawal
             </div>
             
-            <a href="{external_redirect_url}" class="verify-button">
+            <a href="{miniapp_url}" class="verify-button">
                 Open RoluATM Mini App
             </a>
             
@@ -660,7 +662,7 @@ async def payment_interface(session_id: str, request: Request):
                 <div class="qr-code">
                     <canvas id="qrcode"></canvas>
                 </div>
-                <div class="verify-url">{external_redirect_url}</div>
+                <div class="verify-url">{miniapp_url}</div>
             </div>
             
             <div class="footer">
@@ -670,7 +672,7 @@ async def payment_interface(session_id: str, request: Request):
         
         <script>
             // Generate QR code for Mini App
-            QRCode.toCanvas(document.getElementById('qrcode'), '{external_redirect_url}', {{
+            QRCode.toCanvas(document.getElementById('qrcode'), '{miniapp_url}', {{
                 width: 200,
                 height: 200,
                 margin: 2,
@@ -816,12 +818,12 @@ async def verify_world_id_endpoint(request: VerifyWorldIDRequest, background_tas
             is_verified = await verify_world_id(request.world_id_payload)
             
             # Create verification record
-            verification = WorldIDVerification(
-                session_id=request.session_id,
-                nullifier_hash=request.world_id_payload.nullifier_hash,
-                merkle_root=request.world_id_payload.merkle_root,
-                proof=request.world_id_payload.proof,
-                verification_level=request.world_id_payload.verification_level,
+    verification = WorldIDVerification(
+        session_id=request.session_id,
+        nullifier_hash=request.world_id_payload.nullifier_hash,
+        merkle_root=request.world_id_payload.merkle_root,
+        proof=request.world_id_payload.proof,
+        verification_level=request.world_id_payload.verification_level,
                 is_verified=is_verified,
                 verified_at=datetime.now(timezone.utc) if is_verified else None
             )
@@ -830,47 +832,47 @@ async def verify_world_id_endpoint(request: VerifyWorldIDRequest, background_tas
             
             if is_verified:
                 # Find or create user
-                user = session.exec(
+        user = session.exec(
                     select(User).where(User.world_id_nullifier == request.world_id_payload.nullifier_hash)
-                ).first()
-                
-                if not user:
-                    user = User(
-                        world_id_nullifier=request.world_id_payload.nullifier_hash,
-                        verification_level=request.world_id_payload.verification_level
-                    )
-                    session.add(user)
-                    session.flush()  # Get user ID
-                
+        ).first()
+        
+        if not user:
+            user = User(
+                world_id_nullifier=request.world_id_payload.nullifier_hash,
+                verification_level=request.world_id_payload.verification_level
+            )
+            session.add(user)
+            session.flush()  # Get user ID
+        
                 # Calculate quarters (assuming $0.25 per quarter)
                 quarters_requested = int(request.amount_usd / 0.25)
                 
                 # Create transaction
-                transaction = Transaction(
-                    session_id=request.session_id,
-                    user_id=user.id,
-                    amount_usd=request.amount_usd,
+        transaction = Transaction(
+            session_id=request.session_id,
+            user_id=user.id,
+            amount_usd=request.amount_usd,
                     quarters_requested=quarters_requested,
                     status=TransactionStatus.VERIFIED,
                     verified_at=datetime.now(timezone.utc),
                     expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
-                    world_id_merkle_root=request.world_id_payload.merkle_root,
-                    world_id_nullifier_hash=request.world_id_payload.nullifier_hash,
+            world_id_merkle_root=request.world_id_payload.merkle_root,
+            world_id_nullifier_hash=request.world_id_payload.nullifier_hash,
                     world_id_proof=request.world_id_payload.proof
-                )
+        )
                 
-                session.add(transaction)
-                
+        session.add(transaction)
+        
                 # Update user stats
                 user.total_transactions += 1
                 user.total_amount_usd += request.amount_usd
                 user.last_transaction_at = datetime.now(timezone.utc)
                 
-                session.commit()
-                
-                return {
-                    "success": True,
-                    "session_id": request.session_id,
+        session.commit()
+        
+        return {
+            "success": True,
+            "session_id": request.session_id,
                     "amount_usd": request.amount_usd,
                     "quarters": quarters_requested,
                     "expires_at": transaction.expires_at.isoformat()
@@ -896,31 +898,31 @@ async def verify_withdrawal(request: WithdrawalLockRequest):
     try:
         with Session(engine) as session:
             # Find verified transaction
-            transaction = session.exec(
-                select(Transaction)
-                .where(Transaction.session_id == request.session_id)
+    transaction = session.exec(
+        select(Transaction)
+        .where(Transaction.session_id == request.session_id)
                 .where(Transaction.status == TransactionStatus.VERIFIED)
                 .where(Transaction.expires_at > datetime.now(timezone.utc))
-            ).first()
-            
-            if not transaction:
+    ).first()
+    
+    if not transaction:
                 raise HTTPException(
                     status_code=404, 
                     detail="No valid verified transaction found"
                 )
             
             # Update transaction status
-            transaction.status = TransactionStatus.DISPENSING
+    transaction.status = TransactionStatus.DISPENSING
             transaction.quarters_dispensed = request.coins_needed
             session.add(transaction)
-            session.commit()
-            
-            return {
-                "success": True,
-                "session_id": request.session_id,
+    session.commit()
+    
+    return {
+        "success": True,
+        "session_id": request.session_id,
                 "amount_usd": transaction.amount_usd,
                 "coins_approved": request.coins_needed
-            }
+    }
             
     except Exception as e:
         logger.error(f"Withdrawal verification error: {e}")
@@ -936,33 +938,33 @@ async def confirm_withdrawal(request: WithdrawalSettleRequest):
     try:
         with Session(engine) as session:
             # Find dispensing transaction
-            transaction = session.exec(
-                select(Transaction)
-                .where(Transaction.session_id == request.session_id)
+    transaction = session.exec(
+        select(Transaction)
+        .where(Transaction.session_id == request.session_id)
                 .where(Transaction.status == TransactionStatus.DISPENSING)
-            ).first()
-            
-            if not transaction:
+    ).first()
+    
+    if not transaction:
                 raise HTTPException(
                     status_code=404, 
                     detail="No dispensing transaction found"
                 )
-            
+    
             # Complete transaction
             transaction.status = TransactionStatus.COMPLETED
-            transaction.quarters_dispensed = request.coins_dispensed
+    transaction.quarters_dispensed = request.coins_dispensed
             transaction.dispensed_at = datetime.now(timezone.utc)
-            transaction.completed_at = datetime.now(timezone.utc)
-            
+    transaction.completed_at = datetime.now(timezone.utc)
+    
             session.add(transaction)
-            session.commit()
-            
-            return {
-                "success": True,
-                "session_id": request.session_id,
+    session.commit()
+    
+    return {
+        "success": True,
+        "session_id": request.session_id,
                 "coins_dispensed": request.coins_dispensed,
-                "completed_at": transaction.completed_at.isoformat()
-            }
+        "completed_at": transaction.completed_at.isoformat()
+    }
 
     except Exception as e:
         logger.error(f"Withdrawal confirmation error: {e}")
@@ -1065,7 +1067,7 @@ async def mini_app_interface():
     try:
         with open("cloud-api/rolu-miniapp.html", "r", encoding="utf-8") as f:
             html_content = f.read()
-        return HTMLResponse(content=html_content)
+    return HTMLResponse(content=html_content)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Mini App file not found")
 
