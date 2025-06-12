@@ -611,126 +611,72 @@ async def root():
         <div class="footer">Powered by World ID • Secure • Private</div>
     </div>
     <script>
-        const appState = {{
-            sessionId: new URLSearchParams(window.location.search).get('session') || 'demo-session-' + Date.now(),
+        const elements = {{
+            statusDiv: document.getElementById('status-message'),
+            withdrawBtn: document.getElementById('withdraw-btn')
         }};
+
         let appInitialized = false;
 
-        const elements = {{
-            withdrawBtn: document.getElementById('withdraw-btn'),
-            statusMessage: document.getElementById('status-message'),
-        }};
-
         function showStatus(message, type = 'info') {{
-            const statusEl = elements.statusMessage;
-            statusEl.className = 'status-message';
-            statusEl.classList.add(`status-${{type}}`);
-            statusEl.innerHTML = `<div class="status-content">${{message}}</div>`;
+            elements.statusDiv.innerHTML = message;
+            elements.statusDiv.className = `status ${{type}}`;
         }}
 
         async function handleWithdraw() {{
+            showStatus('Verifying you are human...', 'info');
+            elements.withdrawBtn.disabled = true;
+
             try {{
-                elements.withdrawBtn.disabled = true;
-                
-                showStatus('🔍 Verifying you are a unique human...', 'warning');
-                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Verifying...';
-                
-                const worldIdPayload = await MiniKit.commands.verify({{
+                const result = await MiniKit.worldID({{
                     action: '{WORLD_ID_ACTION}',
-                    signal: appState.sessionId,
                     verification_level: 'orb'
                 }});
+                console.log('World ID verification result:', result);
+                showStatus('✅ Verified! Sending payment request...', 'success');
 
-                if (!worldIdPayload.success) throw new Error('World ID verification was cancelled.');
-
-                showStatus('🔐 Securely verifying proof...', 'warning');
-                const verifyResponse = await fetch('/api/verify-world-id', {{
+                const response = await fetch('/api/initiate-payment', {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{
-                        world_id_payload: worldIdPayload,
-                        session_id: appState.sessionId
-                    }})
+                    body: JSON.stringify({{ ...result, amount: 10.50 }})
                 }});
 
-                if (!verifyResponse.ok) {{
-                    const error = await verifyResponse.json();
-                    throw new Error(error.detail || 'Backend verification failed.');
-                }}
+                if (!response.ok) throw new Error(`Server error: ${{response.status}}`);
+
+                const paymentData = await response.json();
+                console.log('Payment initiation response:', paymentData);
+                showStatus('Please approve the payment in your wallet.', 'info');
+
+                const paymentResult = await MiniKit.pay({{
+                    currency: 'USDC',
+                    amount: paymentData.amount,
+                    to: paymentData.recipient,
+                    payment_id: paymentData.payment_id
+                }});
                 
-                showStatus('💳 Initializing payment...', 'warning');
-                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Preparing...';
-                const initResponse = await fetch('/api/initiate-payment', {{
-                    method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{ session_id: appState.sessionId, amount: 10.50 }})
-                }});
+                console.log('Payment result:', paymentResult);
+                showStatus('Confirming payment on our side...', 'info');
 
-                if (!initResponse.ok) {{
-                    const error = await initResponse.json();
-                    throw new Error(error.detail || 'Could not initiate payment.');
-                }}
-                const {{ reference, to_address }} = await initResponse.json();
-
-                showStatus('💰 Please approve the transaction in your wallet...', 'warning');
-                const paymentPayload = {{
-                    reference: reference,
-                    to: to_address,
-                    tokens: [{{ symbol: 'USDC', token_amount: '10500000' }}],
-                    description: 'RoluATM Cash Withdrawal'
-                }};
-
-                const paymentResponse = await MiniKit.commands.pay(paymentPayload);
-                if (!paymentResponse.success) throw new Error('Payment was cancelled.');
-
-                showStatus('🔗 Confirming transaction on the blockchain...', 'warning');
-                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Confirming...';
                 const confirmResponse = await fetch('/api/confirm-payment', {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{ transaction_id: paymentResponse.transaction_id, reference: reference }})
+                    body: JSON.stringify(paymentResult)
                 }});
-                
-                if (!confirmResponse.ok) {{
-                    const error = await confirmResponse.json();
-                    throw new Error(error.detail || 'Could not confirm payment.');
-                }}
-                
-                showStatus('✅ Payment confirmed! Dispensing cash...', 'success');
-                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Dispensing...';
-                await signalCashDispense();
 
-            }} catch (error) {{
-                showStatus(`❌ Error: ${{error.message}}`, 'error');
-                elements.withdrawBtn.innerHTML = 'Retry Withdrawal';
-                elements.withdrawBtn.disabled = false;
-                if (typeof MiniKit !== 'undefined') MiniKit.commands.sendHapticFeedback({{ type: 'error' }});
-            }}
-        }}
-
-        async function signalCashDispense() {{
-            try {{
-                const response = await fetch('https://rolu-atm-system.vercel.app/confirm-withdrawal', {{
-                    method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{
-                        kiosk_id: 'demo-kiosk-001',
-                        session_id: appState.sessionId,
-                        coins_dispensed: 40,
-                        timestamp: new Date().toISOString()
-                    }})
-                }});
-                if (response.ok) {{
-                    showStatus('✅ Please collect your cash.', 'success');
-                    elements.withdrawBtn.innerHTML = '✅ Transaction Complete';
-                    if (typeof MiniKit !== 'undefined') MiniKit.commands.sendHapticFeedback({{ type: 'success' }});
+                if (!confirmResponse.ok) throw new Error('Payment confirmation failed');
+                
+                const finalResult = await confirmResponse.json();
+                if (finalResult.success) {{
+                    showStatus('✅ Payment successful! Your cash is being dispensed.', 'success');
                 }} else {{
-                    const errorData = await response.json().catch(() => ({{}}));
-                    throw new Error(`ATM Hardware Error: ${{errorData.detail || 'Please contact support.'}}`);
+                    showStatus(`❌ Payment failed: ${{finalResult.error}}`, 'error');
                 }}
+
             }} catch (error) {{
-                showStatus(`❌ ${{error.message}}`, 'error');
-                elements.withdrawBtn.innerHTML = 'Contact Support';
+                console.error('An error occurred:', error);
+                const errorMessage = error.message || 'An unknown error occurred.';
+                showStatus(`❌ Error: ${{errorMessage}}`, 'error');
+                elements.withdrawBtn.disabled = false; // Re-enable on failure
             }}
         }}
 
@@ -742,56 +688,43 @@ async def root():
             elements.withdrawBtn.innerHTML = 'Withdraw $10.50';
             showStatus('Ready to withdraw cash', 'success');
         }}
-
+        
         function initMiniKit() {{
-            if (typeof MiniKit !== 'undefined') {{
-                try {{
-                    MiniKit.install();
-                    MiniKit.init({{ app_id: '{WORLD_ID_APP_ID}' }});
-                    console.log('MiniKit initialized successfully');
-                    initializeApp(); // Initialize the main app now that MiniKit is ready
-                    return true;
-                }} catch (e) {{
-                    showStatus('Error: Could not initialize World App.', 'error');
-                    console.error("MiniKit initialization failed:", e);
-                    return false;
-                }}
+            if (typeof MiniKit === 'undefined') {{
+                showStatus('❌ Error: A component failed to initialize correctly.', 'error');
+                console.error('initMiniKit called, but MiniKit object is not available.');
+                return;
             }}
-            return false; // MiniKit script not loaded yet
+            try {{
+                MiniKit.install();
+                MiniKit.init({{ app_id: '{WORLD_ID_APP_ID}' }});
+                console.log('MiniKit initialized successfully');
+                initializeApp();
+            }} catch (e) {{
+                showStatus(`❌ Error: Could not initialize World App: ${{e.message}}`, 'error');
+                console.error("MiniKit initialization failed:", e);
+            }}
         }}
 
         window.addEventListener('load', () => {{
             showStatus('Initializing...', 'info');
+            console.log('Loading MiniKit script...');
             
-            // Try to init immediately. If it fails, start polling.
-            if (!initMiniKit()) {{
-                let attempts = 0;
-                const maxAttempts = 80; // Increased to 8 seconds for more resilience
-                console.log('MiniKit not found immediately. Starting to poll...');
-                const interval = setInterval(() => {{
-                    attempts++;
-                    if (initMiniKit()) {{
-                        // Successfully initialized
-                        console.log(`MiniKit found after ${{attempts * 100}}ms.`);
-                        clearInterval(interval);
-                    }} else if (attempts >= maxAttempts) {{
-                        // Failed to initialize after timeout
-                        clearInterval(interval);
-                        const finalErrorMessage = 'Could not connect to World App components. <a href="#" onclick="manualInit()">Try again</a>';
-                        showStatus(`❌ Error: ${{finalErrorMessage}}`, 'error');
-                        console.error('MiniKit timed out. This is unexpected when running inside World App.');
-                    }}
-                }}, 100);
-            }}
+            const script = document.createElement('script');
+            script.src = 'https://minikit.world.org/v1/minikit.js';
+            
+            script.onload = () => {{
+                console.log('MiniKit script has successfully loaded.');
+                initMiniKit();
+            }};
+            
+            script.onerror = () => {{
+                console.error('CRITICAL: The MiniKit script failed to load.');
+                showStatus('❌ Error: Could not download required components. Please check your network and try again.', 'error');
+            }};
+            
+            document.head.appendChild(script);
         }});
-
-        function manualInit() {{
-            console.log('Manual initialization triggered!');
-            showStatus('Retrying initialization...', 'info');
-            if (!initMiniKit()) {{
-                showStatus('❌ Error: Manual initialization failed. Please restart the app.', 'error');
-            }}
-        }}
     </script>
 </body>
 </html>
