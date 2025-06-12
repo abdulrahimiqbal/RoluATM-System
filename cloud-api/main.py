@@ -576,55 +576,87 @@ async def root():
             elements.withdrawBtn.disabled = true;
 
             try {{
-                const result = await MiniKit.worldID({{
-                    action: '{WORLD_ID_ACTION}',
+                console.log('Starting World ID verification...');
+                
+                // Use the correct MiniKit API method
+                const verifyPayload = {{
+                    action: 'withdraw-cash',
                     verification_level: 'orb'
-                }});
-                console.log('World ID verification result:', result);
-                showStatus('✅ Verified! Sending payment request...', 'success');
+                }};
+                
+                console.log('Calling MiniKit.commandsAsync.verify with payload:', verifyPayload);
+                const {{ finalPayload }} = await MiniKit.commandsAsync.verify(verifyPayload);
+                
+                console.log('MiniKit verification response:', finalPayload);
+                
+                if (finalPayload.status === 'error') {{
+                    console.error('World ID verification failed:', finalPayload);
+                    showStatus('❌ Verification failed. Please try again.', 'error');
+                    elements.withdrawBtn.disabled = false;
+                    return;
+                }}
 
+                console.log('World ID verification successful, sending to backend...');
+                showStatus('Processing withdrawal...', 'info');
+
+                // Send the proof to our backend for verification and payment initiation
                 const response = await fetch('/api/initiate-payment', {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{ ...result, amount: 10.50 }})
+                    body: JSON.stringify({{
+                        world_id_proof: finalPayload,
+                        action: 'withdraw-cash'
+                    }})
                 }});
 
-                if (!response.ok) throw new Error(`Server error: ${{response.status}}`);
+                const result = await response.json();
+                console.log('Backend response:', result);
 
-                const paymentData = await response.json();
-                console.log('Payment initiation response:', paymentData);
-                showStatus('Please approve the payment in your wallet.', 'info');
+                if (!response.ok) {{
+                    throw new Error(result.detail || 'Payment initiation failed');
+                }}
 
-                const paymentResult = await MiniKit.pay({{
-                    currency: 'USDC',
-                    amount: paymentData.amount,
-                    to: paymentData.recipient,
-                    payment_id: paymentData.payment_id
-                }});
-                
+                // Now initiate the payment with MiniKit
+                console.log('Initiating payment with MiniKit...');
+                const paymentPayload = {{
+                    reference: result.payment_id,
+                    to: result.wallet_address,
+                    tokens: [{{
+                        symbol: 'USDCE',
+                        token_amount: result.amount.toString()
+                    }}],
+                    description: `RoluATM Cash Withdrawal - ${{result.amount}}`
+                }};
+
+                console.log('Payment payload:', paymentPayload);
+                const paymentResult = await MiniKit.commandsAsync.pay(paymentPayload);
                 console.log('Payment result:', paymentResult);
-                showStatus('Confirming payment on our side...', 'info');
 
-                const confirmResponse = await fetch('/api/confirm-payment', {{
-                    method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify(paymentResult)
-                }});
+                if (paymentResult.finalPayload.status === 'success') {{
+                    // Confirm the payment on the backend
+                    const confirmResponse = await fetch('/api/confirm-payment', {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{
+                            payment_id: result.payment_id,
+                            transaction_id: paymentResult.finalPayload.transaction_id
+                        }})
+                    }});
 
-                if (!confirmResponse.ok) throw new Error('Payment confirmation failed');
-                
-                const finalResult = await confirmResponse.json();
-                if (finalResult.success) {{
-                    showStatus('✅ Payment successful! Your cash is being dispensed.', 'success');
+                    if (confirmResponse.ok) {{
+                        showStatus('✅ Payment successful! Please collect your cash.', 'success');
+                    }} else {{
+                        showStatus('⚠️ Payment completed but confirmation failed. Please contact support.', 'error');
+                    }}
                 }} else {{
-                    showStatus(`❌ Payment failed: ${{finalResult.error}}`, 'error');
+                    showStatus('❌ Payment failed. Please try again.', 'error');
                 }}
 
             }} catch (error) {{
-                console.error('An error occurred:', error);
-                const errorMessage = error.message || 'An unknown error occurred.';
-                showStatus(`❌ Error: ${{errorMessage}}`, 'error');
-                elements.withdrawBtn.disabled = false; // Re-enable on failure
+                console.error('Withdrawal error:', error);
+                showStatus(`❌ Error: ${{error.message}}`, 'error');
+            }} finally {{
+                elements.withdrawBtn.disabled = false;
             }}
         }}
 
@@ -1028,7 +1060,7 @@ async def mini_app_interface(session: str = None):
                         to: '{ROLU_WALLET_ADDRESS}', // RoluATM wallet address
                         tokens: [{{
                             symbol: 'USDC',
-                            token_amount: '10.500000' // $10.50 in USDC (6 decimals)
+                            amount: '10.500000' // $10.50 in USDC (6 decimals)
                         }}]
                     }});
                     
