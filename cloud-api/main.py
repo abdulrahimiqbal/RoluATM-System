@@ -578,6 +578,16 @@ async def root():
             try {{
                 console.log('Starting World ID verification...');
                 
+                // Check if verify command is available
+                if (!MiniKit.commandsAsync || !MiniKit.commandsAsync.verify) {{
+                    throw new Error('Verify command is not available. Please update your World App.');
+                }}
+                
+                // Check command availability if the property exists
+                if (MiniKit.isCommandAvailable && !MiniKit.isCommandAvailable.verify) {{
+                    throw new Error('Verify command is not supported by your World App version. Please update the app.');
+                }}
+                
                 // Use the correct MiniKit API method
                 const verifyPayload = {{
                     action: 'withdraw-cash',
@@ -614,6 +624,11 @@ async def root():
 
                 if (!response.ok) {{
                     throw new Error(result.detail || 'Payment initiation failed');
+                }}
+
+                // Check if pay command is available
+                if (!MiniKit.commandsAsync.pay) {{
+                    throw new Error('Pay command is not available. Please update your World App.');
                 }}
 
                 // Now initiate the payment with MiniKit
@@ -663,6 +678,22 @@ async def root():
         function initializeApp() {{
             if (appInitialized) return;
             appInitialized = true;
+            
+            // Debug: Check what's available in MiniKit
+            console.log('=== MINIKIT DEBUG ===');
+            console.log('MiniKit keys:', Object.keys(MiniKit));
+            console.log('MiniKit.commandsAsync:', MiniKit.commandsAsync);
+            if (MiniKit.commandsAsync) {{
+                console.log('commandsAsync keys:', Object.keys(MiniKit.commandsAsync));
+            }}
+            console.log('MiniKit.isCommandAvailable:', MiniKit.isCommandAvailable);
+            console.log('window.WorldApp:', window.WorldApp);
+            if (window.WorldApp) {{
+                console.log('WorldApp.supported_commands:', window.WorldApp.supported_commands);
+                console.log('WorldApp.world_app_version:', window.WorldApp.world_app_version);
+            }}
+            console.log('=== END DEBUG ===');
+            
             elements.withdrawBtn.addEventListener('click', handleWithdraw);
             elements.withdrawBtn.disabled = false;
             elements.withdrawBtn.innerHTML = 'Withdraw $10.50';
