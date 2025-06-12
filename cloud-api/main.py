@@ -429,10 +429,10 @@ async def test_endpoint():
 async def payment_interface(session_id: str, request: Request):
     """Generate World ID payment interface"""
     
-    # For RoluATM, we're using External Integration, not Mini App
-    # Generate the correct World ID verification URL
+    # For RoluATM, we're using World ID Kiosk mode for physical ATM
+    # This generates the correct URL that opens the verification drawer in World App
     
-    world_id_verify_url = f"https://worldcoin.org/verify?app_id={WORLD_ID_APP_ID}&action={WORLD_ID_ACTION}&signal={session_id}"
+    world_id_verify_url = f"https://developer.worldcoin.org/kiosk/{WORLD_ID_APP_ID}?action={WORLD_ID_ACTION}&signal={session_id}"
     
     html_content = f"""
     <!DOCTYPE html>
@@ -866,7 +866,7 @@ async def confirm_withdrawal(request: WithdrawalSettleRequest):
                 "coins_dispensed": request.coins_dispensed,
                 "completed_at": transaction.completed_at.isoformat()
             }
-            
+
     except Exception as e:
         logger.error(f"Withdrawal confirmation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
