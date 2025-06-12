@@ -528,91 +528,37 @@ async def serve_payment_app(session_id: str):
 
 @app.get("/")
 async def root():
-    """Root endpoint - Mini App Interface"""
-    # This HTML content is now much cleaner and more secure.
+    # This endpoint now serves the primary mini-app interface
     html_content = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RoluATM - Cash Withdrawal</title>
-    
-    <!-- The /world-app.json endpoint is now used for metadata -->
-    <link rel="manifest" href="/world-app.json">
-    
-    <link rel="icon" type="image/png" href="/favicon.png">
-    
+    <title>RoluATM</title>
     <style>
-        /* Using double curly braces to escape for Python's .format() */
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            color: #333;
-        }}
-        .container {{
-            max-width: 400px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-        }}
-        .header {{ text-align: center; margin-bottom: 30px; }}
-        .logo {{ font-size: 32px; font-weight: bold; color: #2c3e50; margin-bottom: 10px; }}
-        .subtitle {{ font-size: 16px; color: #7f8c8d; }}
-        .amount-display {{
-            background: linear-gradient(135deg, #4CAF50, #45a049);
-            color: white; padding: 25px; border-radius: 15px; text-align: center; margin: 20px 0;
-        }}
-        .amount-value {{ font-size: 36px; font-weight: bold; margin-bottom: 5px; }}
-        .amount-desc {{ opacity: 0.9; font-size: 14px; }}
-        .action-button {{
-            width: 100%; background: linear-gradient(135deg, #667eea, #764ba2); color: white;
-            border: none; padding: 15px 20px; border-radius: 12px; font-size: 16px;
-            font-weight: 600; cursor: pointer; margin: 15px 0; transition: all 0.3s ease;
-        }}
-        .action-button:hover {{ transform: translateY(-2px); box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3); }}
-        .action-button:active {{ transform: translateY(0); box-shadow: 0 4px 10px rgba(102, 126, 234, 0.2); }}
-        .action-button:disabled {{ background: #bdc3c7; cursor: not-allowed; transform: none; box-shadow: none; }}
-        .status-message {{ text-align: center; padding: 15px; border-radius: 10px; margin: 15px 0; font-weight: 500; }}
-        .status-success {{ background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }}
-        .status-error {{ background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }}
-        .status-warning {{ background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }}
-        .status-info {{ background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }}
-        .status-content {{ line-height: 1.4; word-break: break-word; }}
-        .status-error .status-content, .status-success .status-content {{ font-weight: 500; }}
-        .status-message.error {{ animation: shake 0.5s ease-in-out; }}
-        @keyframes shake {{ 0%, 100% {{ transform: translateX(0); }} 25% {{ transform: translateX(-5px); }} 75% {{ transform: translateX(5px); }} }}
-        .spinner {{
-            border: 3px solid #f3f3f3; border-top: 3px solid #667eea; border-radius: 50%;
-            width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; margin-right: 10px;
-        }}
-        @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
-        .footer {{ text-align: center; margin-top: 30px; font-size: 12px; color: #95a5a6; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: #f2f2f7; }}
+        .container {{ text-align: center; background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+        h1 {{ font-size: 24px; margin-bottom: 8px; }}
+        p {{ color: #666; margin-top: 0; }}
+        .status {{ padding: 10px 15px; border-radius: 8px; margin: 20px 0; font-weight: 500; }}
+        .status.info {{ background-color: #eef5ff; color: #3b82f6; }}
+        .status.success {{ background-color: #f0fdf4; color: #22c55e; }}
+        .status.error {{ background-color: #fef2f2; color: #ef4444; }}
+        #withdraw-btn {{ background-color: #3b82f6; color: white; border: none; padding: 15px 30px; font-size: 16px; border-radius: 8px; cursor: pointer; transition: background-color 0.2s; width: 100%; }}
+        #withdraw-btn:disabled {{ background-color: #9ca3af; cursor: not-allowed; }}
     </style>
-    <script src="https://minikit.world.org/v1/minikit.js"></script>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <div class="logo">🏧 RoluATM</div>
-            <div class="subtitle">World ID Verified Cash Withdrawal</div>
-        </div>
-        <div class="amount-display">
-            <div class="amount-value">$10.00</div>
-            <div class="amount-desc">Cash Withdrawal + $0.50 fee</div>
-        </div>
-        <div id="status-message" class="status-message"></div>
-        <button id="withdraw-btn" class="action-button" disabled>Initializing...</button>
-        <div class="footer">Powered by World ID • Secure • Private</div>
+        <h1>RoluATM</h1>
+        <p>Your portal to digital cash</p>
+        <div id="status" class="status info">Initializing...</div>
+        <button id="withdraw-btn" disabled>Loading...</button>
     </div>
     <script>
         const elements = {{
-            statusDiv: document.getElementById('status-message'),
+            statusDiv: document.getElementById('status'),
             withdrawBtn: document.getElementById('withdraw-btn')
         }};
 
