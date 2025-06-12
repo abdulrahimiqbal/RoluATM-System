@@ -248,4 +248,31 @@ tail -f /opt/roluatm/kiosk-pi/backend/logs/app.log
 ## Support
 
 For hardware issues, consult Telequip T-Flex documentation.
-For software issues, check the logs and GitHub issues. 
+For software issues, check the logs and GitHub issues.
+
+## Environment Variables
+
+### Required World Integration Variables
+
+```bash
+# World ID Configuration
+WORLD_ID_APP_ID=app_263013ca6f702add37ad338fa43d4307  # Your World App ID
+WORLD_ID_ACTION=withdraw-cash                          # Your World ID action
+WORLD_API_KEY=your_world_developer_api_key            # World Developer Portal API key
+
+# Payment Configuration  
+ROLU_WALLET_ADDRESS=0x742fd484b63E7C9b7f34FAb65A8c165B7cd5C5e8  # Whitelisted wallet address
+
+# Database Configuration
+NEON_DATABASE_URL=postgresql://user:pass@host/db       # Neon Postgres URL
+```
+
+### World Developer Portal Setup
+
+1. **Create Mini App**: Register your app at [developer.worldcoin.org](https://developer.worldcoin.org)
+2. **Whitelist Wallet**: Add your `ROLU_WALLET_ADDRESS` to the allowed recipients  
+3. **Configure Actions**: Create a "withdraw-cash" incognito action
+4. **Get API Key**: Generate API key for payment verification
+5. **App Metadata**: Configure app name, description, logo (512x512px)
+
+## API Endpoints 

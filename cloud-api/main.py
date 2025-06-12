@@ -65,9 +65,11 @@ if not DATABASE_URL:
 # World ID configuration
 WORLD_ID_APP_ID = os.getenv("WORLD_ID_APP_ID", "app_263013ca6f702add37ad338fa43d4307")
 WORLD_ID_ACTION = os.getenv("WORLD_ID_ACTION", "withdraw-cash")
+ROLU_WALLET_ADDRESS = os.getenv("ROLU_WALLET_ADDRESS", "0x742fd484b63E7C9b7f34FAb65A8c165B7cd5C5e8")
 
 logger.info(f"World ID App ID: {WORLD_ID_APP_ID}")
 logger.info(f"World ID Action: {WORLD_ID_ACTION}")
+logger.info(f"RoluATM Wallet: {ROLU_WALLET_ADDRESS}")
 logger.info(f"Database URL configured: {bool(DATABASE_URL)}")
 
 # Create database engine with error handling
@@ -279,92 +281,63 @@ async def verify_worldid(
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_session)
 ):
-    """Verify World ID and create user if needed"""
-    
-    # Record verification attempt
-    verification = WorldIDVerification(
-        session_id=request.session_id,
-        nullifier_hash=request.world_id_payload.nullifier_hash,
-        merkle_root=request.world_id_payload.merkle_root,
-        proof=request.world_id_payload.proof,
-        verification_level=request.world_id_payload.verification_level,
-        is_verified=False
-    )
-    
+    """Verify World ID proof with backend validation"""
     try:
-        # Verify with World ID API
-        is_verified = await verify_world_id(request.world_id_payload)
+        # Extract World ID payload
+        payload = request.world_id_payload
         
-        if not is_verified:
-            verification.error_message = "World ID verification failed"
-            session.add(verification)
-            session.commit()
-            raise HTTPException(status_code=400, detail="World ID verification failed")
-        
-        # Check for duplicate nullifier
-        existing_verification = session.exec(
-            select(WorldIDVerification)
-            .where(WorldIDVerification.nullifier_hash == request.world_id_payload.nullifier_hash)
-            .where(WorldIDVerification.is_verified == True)
-        ).first()
-        
-        if existing_verification:
-            verification.error_message = "World ID already used"
-            session.add(verification)
-            session.commit()
-            raise HTTPException(status_code=400, detail="World ID already used for verification")
-        
-        # Mark verification as successful
-        verification.is_verified = True
-        verification.verified_at = datetime.now(timezone.utc)
-        
-        # Get or create user
-        user = session.exec(
-            select(User)
-            .where(User.world_id_nullifier == request.world_id_payload.nullifier_hash)
-        ).first()
-        
-        if not user:
-            user = User(
-                world_id_nullifier=request.world_id_payload.nullifier_hash,
-                verification_level=request.world_id_payload.verification_level
+        # Verify proof with World API
+        async with httpx.AsyncClient() as client:
+            verification_response = await client.post(
+                f"https://developer.worldcoin.org/api/v2/verify/{WORLD_ID_APP_ID}",
+                json={{
+                    "nullifier_hash": payload.nullifier_hash,
+                    "merkle_root": payload.merkle_root,
+                    "proof": payload.proof,
+                    "verification_level": payload.verification_level,
+                    "action": WORLD_ID_ACTION,
+                    "signal_hash": request.session_id  # Use session_id as signal
+                }},
+                headers={{"Content-Type": "application/json"}}
             )
-            session.add(user)
-            session.flush()  # Get user ID
+            
+        if verification_response.status_code != 200:
+            verification_data = verification_response.json()
+            logger.error(f"World ID verification failed: {verification_data}")
+            raise HTTPException(
+                status_code=400, 
+                detail=f"World ID verification failed: {verification_data.get('detail', 'Unknown error')}"
+            )
         
-        # Create transaction record
-        transaction = Transaction(
+        # Create verification record
+        verification = WorldIDVerification(
             session_id=request.session_id,
-            user_id=user.id,
+            nullifier_hash=request.world_id_payload.nullifier_hash,
+            merkle_root=request.world_id_payload.merkle_root,
+            verification_level=request.world_id_payload.verification_level,
+            action=WORLD_ID_ACTION,
             amount_usd=request.amount_usd,
-            quarters_requested=int(request.amount_usd * 4),
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
-            world_id_merkle_root=request.world_id_payload.merkle_root,
-            world_id_nullifier_hash=request.world_id_payload.nullifier_hash,
-            world_id_proof=request.world_id_payload.proof,
-            status=TransactionStatus.VERIFIED,
             verified_at=datetime.now(timezone.utc)
         )
-        session.add(transaction)
         
         session.add(verification)
         session.commit()
         
+        logger.info(f"World ID verified for session {request.session_id}")
+        
         return {
             "success": True,
             "session_id": request.session_id,
-            "user_id": user.id,
-            "transaction_id": transaction.id
+            "verified_at": verification.verified_at.isoformat(),
+            "nullifier_hash": request.world_id_payload.nullifier_hash,
+            "verification_level": request.world_id_payload.verification_level
         }
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"World ID verification error: {e}")
-        verification.error_message = str(e)
-        session.add(verification)
-        session.commit()
-        raise HTTPException(status_code=500, detail="Verification service error")
+        raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
 
 
 @app.post("/verify-withdrawal")
@@ -559,6 +532,20 @@ async def root():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RoluATM - Cash Withdrawal</title>
+    
+    <!-- Mini App Metadata - Required by World -->
+    <meta name="world-app" content='{
+        "name": "RoluATM",
+        "description": "World ID verified cash withdrawal from cryptocurrency",
+        "logo": "https://rolu-atm-system.vercel.app/logo-512.png",
+        "category": "financial",
+        "verification_required": true,
+        "payment_required": true
+    }'>
+    
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -807,12 +794,28 @@ async def root():
                 // Step 2: Payment Authorization
                 elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Processing Payment...';
                 
+                // Initialize payment in backend first
+                const initResponse = await fetch('/api/initiate-payment', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ session_id: appState.sessionId, amount: 10.50 }})
+                }});
+                
+                if (!initResponse.ok) {{
+                    throw new Error('Failed to initialize payment');
+                }}
+                
+                const {{ reference }} = await initResponse.json();
+                
+                // World Pay API compliant payload
                 const paymentPayload = {{
-                    to: '0x742fd484b63E7C9b7f34FAb65A8c165B7cd5C5e8', // RoluATM wallet address
-                    value: 10.50, // $10.50 (withdrawal + fee)
-                    token: 'USDC',
-                    description: 'RoluATM Cash Withdrawal',
-                    reference: appState.sessionId
+                    reference: reference, // Backend-generated reference ID
+                    to: '{ROLU_WALLET_ADDRESS}', // RoluATM wallet address  
+                    tokens: [{{
+                        symbol: 'USDC',
+                        token_amount: '10500000' // $10.50 in USDC (6 decimals)
+                    }}],
+                    description: 'RoluATM Cash Withdrawal'
                 }};
 
                 const paymentResponse = await MiniKit.commands.pay(paymentPayload);
@@ -821,12 +824,23 @@ async def root():
                     throw new Error(paymentResponse.error || 'Payment failed');
                 }}
 
-                console.log('Payment authorized:', paymentResponse);
-                showStatus('Payment authorized! Dispensing cash...', 'success');
-                elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Dispensing...';
-
-                // Step 3: Signal Cash Dispenser
-                await signalCashDispense();
+                // Verify payment in backend
+                const verifyResponse = await fetch('/api/confirm-payment', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ payload: paymentResponse, reference: reference }})
+                }});
+                
+                const verifyResult = await verifyResponse.json();
+                
+                if (verifyResult.success) {{
+                    console.log('Payment verified:', paymentResponse);
+                    showStatus('Payment confirmed! Dispensing cash...', 'success');
+                    elements.withdrawBtn.innerHTML = '<span class="spinner"></span>Dispensing...';
+                    await signalCashDispense();
+                }} else {{
+                    throw new Error('Payment verification failed');
+                }}
 
             }} catch (error) {{
                 console.error('Withdrawal process failed:', error);
@@ -909,6 +923,39 @@ async def test_endpoint():
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "status": "success"
     }
+
+
+@app.get("/world-app.json")
+async def world_app_manifest():
+    """World App manifest for mini app metadata"""
+    return {{
+        "name": "RoluATM",
+        "description": "World ID verified cash withdrawal from cryptocurrency",
+        "logo": "https://rolu-atm-system.vercel.app/logo-512.png",
+        "category": "financial",
+        "verification_required": True,
+        "payment_required": True,
+        "version": "1.0.0",
+        "developer": {{
+            "name": "RoluATM",
+            "url": "https://rolu-atm-system.vercel.app"
+        }},
+        "permissions": [
+            "world_id_verify",
+            "payments",
+            "haptic_feedback"
+        ]
+    }}
+
+
+@app.get("/favicon.png")
+async def favicon():
+    """Favicon endpoint"""
+    # Return a simple 1x1 transparent PNG for now
+    # In production, replace with actual favicon
+    from fastapi.responses import Response
+    transparent_png = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x00\x01\x00\x00\x00\x00\x00\x00\x2d\xb4\x06\x17\x00\x00\x00\x00IEND\xaeB`\x82'
+    return Response(content=transparent_png, media_type="image/png")
 
 
 @app.post("/kiosk-health")
@@ -1186,7 +1233,7 @@ async def mini_app_interface(session: str = None):
                 try {{
                     const response = await MiniKit.commands.pay({{
                         reference: sessionId,
-                        to: '0x1234567890123456789012345678901234567890', // Your wallet address
+                        to: '{ROLU_WALLET_ADDRESS}', // RoluATM wallet address
                         tokens: [{{
                             symbol: 'USDC',
                             token_amount: '10.500000' // $10.50 in USDC (6 decimals)
@@ -1261,6 +1308,68 @@ async def payment_success(session_id: str):
     """
     
     return HTMLResponse(content=html_content)
+
+
+@app.post("/api/initiate-payment")
+async def initiate_payment(request: dict):
+    """Initialize payment - Required by World Pay API"""
+    session_id = request.get("session_id")
+    amount = request.get("amount", 10.50)
+    
+    # Generate unique reference ID
+    reference = f"rolu-{uuid.uuid4().hex[:16]}"
+    
+    # TODO: Store reference in database for verification
+    # For now, we'll use in-memory storage (add Redis/DB in production)
+    
+    logger.info(f"Payment initiated: {reference} for session {session_id}")
+    
+    return {
+        "reference": reference,
+        "amount": amount,
+        "session_id": session_id
+    }
+
+
+@app.post("/api/confirm-payment")
+async def confirm_payment(request: dict):
+    """Verify payment with World Developer Portal API"""
+    payload = request.get("payload")
+    reference = request.get("reference")
+    
+    if not payload or not reference:
+        raise HTTPException(status_code=400, detail="Missing payload or reference")
+    
+    try:
+        # Get transaction details from World API
+        transaction_id = payload.get("transaction_id")
+        if not transaction_id:
+            raise HTTPException(status_code=400, detail="Missing transaction_id")
+            
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://developer.worldcoin.org/api/v2/minikit/transaction/{transaction_id}",
+                params={{"app_id": WORLD_ID_APP_ID, "type": "payment"}},
+                headers={{"Authorization": f"Bearer {os.getenv('WORLD_API_KEY', '')}"}}
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"World API error: {response.status_code} - {response.text}")
+                return {"success": False, "error": "Payment verification failed"}
+                
+            transaction = response.json()
+            
+            # Verify transaction matches our reference
+            if transaction.get("reference") == reference and transaction.get("transaction_status") != "failed":
+                logger.info(f"Payment verified: {reference}")
+                return {"success": True, "transaction": transaction}
+            else:
+                logger.warning(f"Payment verification failed for {reference}")
+                return {"success": False, "error": "Transaction verification failed"}
+                
+    except Exception as e:
+        logger.error(f"Payment confirmation error: {e}")
+        return {"success": False, "error": str(e)}
 
 
 # For local development
