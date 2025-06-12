@@ -429,8 +429,8 @@ async def test_endpoint():
 async def payment_interface(session_id: str, request: Request):
     """Generate World ID Mini App payment interface"""
     
-    # Generate the correct Mini App URL format
-    mini_app_url = f"worldapp://mini-app?app_id={WORLD_ID_APP_ID}&path=/pay/{session_id}"
+    # Generate the correct Mini App URL format with session parameter
+    mini_app_url = f"worldapp://mini-app?app_id={WORLD_ID_APP_ID}&path=/miniapp?session={session_id}"
     
     html_content = f"""
     <!DOCTYPE html>

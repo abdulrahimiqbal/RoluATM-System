@@ -98,6 +98,13 @@
             <div>Cash Withdrawal + $0.50 fee</div>
         </div>
         
+        <div id="debug-info" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0; font-size: 12px; color: #666;">
+            <strong>Debug Info:</strong><br>
+            Session: <span id="session-display">Loading...</span><br>
+            MiniKit: <span id="minikit-status">Checking...</span><br>
+            URL: <span id="url-display">Loading...</span>
+        </div>
+        
         <div id="status-message" class="status-message" style="display: none;"></div>
         
         <button id="verify-btn" class="action-button">
@@ -115,12 +122,28 @@
             MiniKit.init({
                 app_id: 'app_263013ca6f702add37ad338fa43d4307'
             });
+            console.log('MiniKit initialized successfully');
+            document.getElementById('minikit-status').textContent = 'Available ✅';
+        } else {
+            console.error('MiniKit not available - ensure this runs in World App');
+            document.getElementById('minikit-status').textContent = 'Not Available ❌';
         }
         
-        let sessionId = new URLSearchParams(window.location.search).get('session') || 'demo-session-' + Date.now();
+        // Get session ID from URL parameters or generate one
+        const urlParams = new URLSearchParams(window.location.search);
+        let sessionId = urlParams.get('session') || 'demo-session-' + Date.now();
+        
+        console.log('RoluATM Mini App loaded');
+        console.log('Session ID:', sessionId);
+        console.log('Current URL:', window.location.href);
+        
+        // Update debug display
+        document.getElementById('session-display').textContent = sessionId;
+        document.getElementById('url-display').textContent = window.location.href;
         
         document.getElementById('verify-btn').addEventListener('click', async () => {
             try {
+                console.log('Starting World ID verification...');
                 showStatus('Verifying your World ID...', 'warning');
                 
                 const verifyResponse = await MiniKit.commands.verify({
@@ -129,28 +152,39 @@
                     verification_level: 'orb'
                 });
                 
+                console.log('Verification response:', verifyResponse);
+                
                 if (verifyResponse.success) {
                     showStatus('World ID verified! Checking wallet...', 'success');
                     document.getElementById('verify-btn').style.display = 'none';
                     document.getElementById('payment-btn').style.display = 'block';
                     
                     // Connect wallet
+                    console.log('Requesting wallet authentication...');
                     const walletResponse = await MiniKit.commands.walletAuth({
                         permissions: ['wallet:read']
                     });
                     
+                    console.log('Wallet response:', walletResponse);
+                    
                     if (walletResponse.success) {
                         document.getElementById('payment-btn').disabled = false;
                         showStatus('Ready for payment authorization', 'success');
+                    } else {
+                        showStatus('Wallet connection failed', 'error');
                     }
+                } else {
+                    throw new Error(verifyResponse.error || 'Verification failed');
                 }
             } catch (error) {
+                console.error('Verification error:', error);
                 showStatus('Verification failed: ' + error.message, 'error');
             }
         });
         
         document.getElementById('payment-btn').addEventListener('click', async () => {
             try {
+                console.log('Starting payment authorization...');
                 showStatus('Processing payment...', 'warning');
                 
                 const paymentResponse = await MiniKit.commands.pay({
@@ -161,11 +195,14 @@
                     reference: sessionId
                 });
                 
+                console.log('Payment response:', paymentResponse);
+                
                 if (paymentResponse.success) {
                     showStatus('Payment successful! Dispensing cash...', 'success');
                     
                     // Signal dispenser
-                    await fetch('https://rolu-atm-system.vercel.app/confirm-withdrawal', {
+                    console.log('Signaling cash dispenser...');
+                    const dispenserResponse = await fetch('https://rolu-atm-system.vercel.app/confirm-withdrawal', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -176,9 +213,26 @@
                         })
                     });
                     
-                    document.getElementById('payment-btn').innerHTML = '✅ Complete';
+                    if (dispenserResponse.ok) {
+                        showStatus('Cash dispensed! Transaction complete!', 'success');
+                        document.getElementById('payment-btn').innerHTML = '✅ Complete';
+                        
+                        // Send haptic feedback if available
+                        if (typeof MiniKit !== 'undefined') {
+                            try {
+                                await MiniKit.commands.sendHapticFeedback({ type: 'success' });
+                            } catch (e) {
+                                console.log('Haptic feedback not available');
+                            }
+                        }
+                    } else {
+                        throw new Error('Dispenser communication failed');
+                    }
+                } else {
+                    throw new Error(paymentResponse.error || 'Payment failed');
                 }
             } catch (error) {
+                console.error('Payment error:', error);
                 showStatus('Payment failed: ' + error.message, 'error');
             }
         });
@@ -188,7 +242,11 @@
             statusEl.textContent = message;
             statusEl.className = `status-message status-${type}`;
             statusEl.style.display = 'block';
+            console.log('Status:', type, message);
         }
+        
+        // Show debug info in status
+        showStatus(`Session: ${sessionId.substring(0, 8)}... - Ready for verification`, 'success');
     </script>
 </body>
 </html> 
