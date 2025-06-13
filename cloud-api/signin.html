@@ -282,19 +282,75 @@
                     throw new Error('Neither MiniKit nor World App available');
                 }
 
+                debugLog('WorldApp object: ' + JSON.stringify(Object.keys(window.WorldApp)));
+                debugLog('WorldApp supported_commands: ' + JSON.stringify(window.WorldApp.supported_commands));
+
+                // Check if verify command is supported
+                const verifyCommand = window.WorldApp.supported_commands?.find(cmd => cmd.name === 'verify');
+                if (!verifyCommand) {
+                    throw new Error('Verify command not supported by World App');
+                }
+
+                debugLog('✅ Verify command found: ' + JSON.stringify(verifyCommand));
+
+                // Try using WorldApp.request if available
+                if (typeof window.WorldApp.request === 'function') {
+                    debugLog('🔄 Using WorldApp.request method...');
+                    
+                    try {
+                        const result = await window.WorldApp.request({
+                            method: 'verify',
+                            params: {
+                                action: APP_CONFIG.action,
+                                signal: APP_CONFIG.signal,
+                                verification_level: 'orb'
+                            }
+                        });
+                        
+                        debugLog('WorldApp.request result: ' + JSON.stringify(result));
+                        
+                        if (result?.nullifier_hash) {
+                            return {
+                                status: 'success',
+                                nullifier_hash: result.nullifier_hash,
+                                merkle_root: result.merkle_root,
+                                proof: result.proof,
+                                verification_level: result.verification_level || 'orb'
+                            };
+                        } else {
+                            throw new Error('WorldApp.request returned invalid result');
+                        }
+                    } catch (requestError) {
+                        debugLog('⚠️ WorldApp.request failed: ' + requestError.message);
+                        // Fall through to postMessage approach
+                    }
+                }
+
+                // Fallback to postMessage approach
+                debugLog('🔄 Using postMessage approach...');
                 return new Promise((resolve, reject) => {
                     const timeout = setTimeout(() => {
-                        reject(new Error('Sign-in timeout'));
+                        reject(new Error('Sign-in timeout - no response from World App'));
                     }, 30000);
 
                     const messageHandler = (event) => {
                         debugLog('Received native message: ' + JSON.stringify(event.data));
                         
                         if (event.data?.eventType === 'verify') {
+                            // Check if this is just an echo of our own message
+                            const isEcho = event.data.eventData?.signal === APP_CONFIG.signal && 
+                                          !event.data.eventData?.nullifier_hash;
+                            
+                            if (isEcho) {
+                                debugLog('⚠️ Detected echo message, ignoring...');
+                                return; // Don't process echo messages
+                            }
+                            
                             clearTimeout(timeout);
                             window.removeEventListener('message', messageHandler);
                             
                             if (event.data.eventData?.nullifier_hash) {
+                                debugLog('✅ Valid verification response received');
                                 // Convert to MiniKit-like format
                                 resolve({
                                     status: 'success',
@@ -304,7 +360,8 @@
                                     verification_level: event.data.eventData.verification_level || 'orb'
                                 });
                             } else {
-                                reject(new Error('Invalid sign-in response'));
+                                debugLog('❌ Response missing nullifier_hash: ' + JSON.stringify(event.data.eventData));
+                                reject(new Error('Invalid sign-in response - missing verification data'));
                             }
                         }
                     };
