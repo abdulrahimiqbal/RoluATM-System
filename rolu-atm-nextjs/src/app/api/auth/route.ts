@@ -4,14 +4,6 @@ import { verifySiweMessage } from '@worldcoin/minikit-js';
 import { createJWTToken } from '@/lib/auth';
 import { getUserByWalletAddress, createUser, updateUserBalance } from '@/lib/database';
 
-interface WalletAuthPayload {
-  status: string;
-  message: string;
-  signature: string;
-  address: string;
-  version: number;
-}
-
 export async function POST(request: NextRequest) {
   try {
     console.log('🔐 Auth request received');

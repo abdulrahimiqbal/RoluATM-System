@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MiniKit, VerificationLevel } from '@worldcoin/minikit-js';
+import { MiniKit } from '@worldcoin/minikit-js';
 
 export const WorldIdSignIn = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -39,7 +39,7 @@ export const WorldIdSignIn = () => {
       const { nonce } = await nonceResponse.json();
       console.log('✅ Nonce received:', nonce);
 
-      // Wallet authentication for both World ID and wallet access
+      // Wallet authentication for both World ID and wallet
       const walletAuthPayload = {
         nonce: nonce,
         requestId: '0',
