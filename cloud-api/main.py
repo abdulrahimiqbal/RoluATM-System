@@ -79,7 +79,7 @@ engine = None
 DATABASE_CONNECTED = False
 try:
     if DATABASE_URL and DATABASE_URL != "sqlite:///./test.db" and DB_MODELS_AVAILABLE:
-        engine = create_engine(DATABASE_URL, echo=False)
+engine = create_engine(DATABASE_URL, echo=False)
         DATABASE_CONNECTED = True
     else:
         logger.warning("Database engine not initialized - limited functionality")
