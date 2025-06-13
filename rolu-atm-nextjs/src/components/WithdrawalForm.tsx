@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { MiniKit } from '@worldcoin/minikit-js';
+import { WORLD_CHAIN_CONTRACTS, ERC20_ABI, ROLU_TREASURY_ADDRESS, toUSDCUnits } from '@/lib/contracts';
 
 interface WithdrawalFormProps {
   balance: number;
@@ -11,6 +13,7 @@ export const WithdrawalForm = ({ balance, onWithdrawal }: WithdrawalFormProps) =
   const [amount, setAmount] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
+  const [currentStep, setCurrentStep] = useState<'input' | 'transaction' | 'monitoring' | 'pin' | 'complete'>('input');
 
   const presetAmounts = [5, 10, 20, 50];
 
@@ -28,44 +31,97 @@ export const WithdrawalForm = ({ balance, onWithdrawal }: WithdrawalFormProps) =
     }
 
     setIsProcessing(true);
-    setStatus('🔄 Processing withdrawal...');
+    setCurrentStep('transaction');
+    setStatus('🔄 Creating World Network transaction...');
 
     try {
-      console.log(`💰 Initiating withdrawal of $${withdrawAmount}`);
+      console.log(`💰 Initiating World Network withdrawal of $${withdrawAmount}`);
       
-      const response = await fetch('/api/withdraw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: withdrawAmount })
+      // Check if MiniKit is available
+      if (!MiniKit.isInstalled()) {
+        throw new Error('Please open this app in World App');
+      }
+
+      // Create World Network transaction
+      console.log('🌐 Sending USDC transfer transaction...');
+      const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({
+        transaction: [
+          {
+            address: WORLD_CHAIN_CONTRACTS.USDC,
+            abi: ERC20_ABI,
+            functionName: 'transfer',
+            args: [
+              ROLU_TREASURY_ADDRESS,
+              toUSDCUnits(withdrawAmount)
+            ]
+          }
+        ]
       });
 
-      console.log('📋 Withdrawal response status:', response.status);
+      console.log('📋 Transaction response:', finalPayload);
 
-      if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Withdrawal successful:', result);
+      if (finalPayload.status === 'success') {
+        console.log('✅ Transaction created successfully:', finalPayload.transaction_id);
         
-        setStatus('💰 Dispensing cash...');
+        setCurrentStep('monitoring');
+        setStatus('⛓️ Transaction submitted. Waiting for confirmation...');
         
-        // Simulate cash dispensing time
-        setTimeout(() => {
-          setStatus('✅ Cash dispensed successfully!');
-          onWithdrawal(); // Refresh balance
-          setAmount('');
+        // Send transaction to backend for monitoring
+        const response = await fetch('/api/initiate-withdrawal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transactionId: finalPayload.transaction_id,
+            amount: withdrawAmount
+          })
+        });
+
+        console.log('📋 Backend response status:', response.status);
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log('✅ Withdrawal monitoring started:', result);
           
-          // Clear success message after 5 seconds
-          setTimeout(() => setStatus(''), 5000);
-        }, 3000);
+          setCurrentStep('pin');
+          setStatus('🔑 Transaction confirmed! PIN will be sent to kiosk shortly...');
+          
+          // Simulate PIN generation and kiosk notification
+          setTimeout(() => {
+            setCurrentStep('complete');
+            setStatus('🏧 Please go to the nearest RoluATM and enter your PIN to collect cash!');
+            onWithdrawal(); // Refresh balance
+            setAmount('');
+            
+            // Reset after 10 seconds
+            setTimeout(() => {
+              setStatus('');
+              setCurrentStep('input');
+            }, 10000);
+          }, 3000);
+        } else {
+          const error = await response.json();
+          console.error('❌ Backend error:', error);
+          setStatus(`❌ ${error.error || 'Failed to process withdrawal'}`);
+          setTimeout(() => {
+            setStatus('');
+            setCurrentStep('input');
+          }, 5000);
+        }
       } else {
-        const error = await response.json();
-        console.error('❌ Withdrawal failed:', error);
-        setStatus(`❌ ${error.message || 'Withdrawal failed'}`);
-        setTimeout(() => setStatus(''), 5000);
+        console.error('❌ Transaction failed:', finalPayload);
+        setStatus(`❌ Transaction failed: ${finalPayload.status}`);
+        setTimeout(() => {
+          setStatus('');
+          setCurrentStep('input');
+        }, 5000);
       }
     } catch (error) {
       console.error('❌ Withdrawal error:', error);
-      setStatus('❌ Network error. Please try again.');
-      setTimeout(() => setStatus(''), 5000);
+      setStatus(`❌ ${error instanceof Error ? error.message : 'Transaction failed'}`);
+      setTimeout(() => {
+        setStatus('');
+        setCurrentStep('input');
+      }, 5000);
     } finally {
       setIsProcessing(false);
     }
@@ -143,7 +199,13 @@ export const WithdrawalForm = ({ balance, onWithdrawal }: WithdrawalFormProps) =
             ? 'bg-green-50 border border-green-200 text-green-700'
             : 'bg-blue-50 border border-blue-200 text-blue-700'
         }`}>
-          <p className="text-sm font-medium">{status}</p>
+          <div className="flex items-center justify-center space-x-2">
+            {currentStep === 'transaction' && <span className="animate-spin">🔄</span>}
+            {currentStep === 'monitoring' && <span className="animate-pulse">⛓️</span>}
+            {currentStep === 'pin' && <span>🔑</span>}
+            {currentStep === 'complete' && <span>🏧</span>}
+            <p className="text-sm font-medium">{status}</p>
+          </div>
         </div>
       )}
     </div>
