@@ -71,8 +71,29 @@ export const WithdrawalForm = ({ balance, onWithdrawal }: WithdrawalFormProps) =
           ]
         });
         finalPayload = response.finalPayload;
+        
+        // Check if sendTransaction returned an error (it doesn't throw, it returns error status)
+        if (finalPayload.status === 'error' && finalPayload.error_code === 'invalid_contract') {
+          console.log('📧 sendTransaction returned invalid_contract error, trying Pay command...');
+          console.log('Error details:', finalPayload);
+          
+          // Fallback to Pay command (simpler, works with whitelisted addresses)
+          const payResponse = await MiniKit.commandsAsync.pay({
+            reference: `rolu-withdrawal-${Date.now()}`,
+            to: ROLU_TREASURY_ADDRESS,
+            tokens: [
+              {
+                symbol: Tokens.USDC,
+                token_amount: transferAmount
+              }
+            ],
+            description: `RoluATM withdrawal of $${withdrawAmount}`
+          });
+          finalPayload = payResponse.finalPayload;
+          console.log('📧 Pay command response:', finalPayload);
+        }
       } catch (sendTransactionError) {
-        console.log('📧 sendTransaction failed (likely contract not whitelisted), trying Pay command...');
+        console.log('📧 sendTransaction threw an exception, trying Pay command...');
         console.log('Error:', sendTransactionError);
         
         // Fallback to Pay command (simpler, works with whitelisted addresses)
@@ -80,14 +101,15 @@ export const WithdrawalForm = ({ balance, onWithdrawal }: WithdrawalFormProps) =
           reference: `rolu-withdrawal-${Date.now()}`,
           to: ROLU_TREASURY_ADDRESS,
           tokens: [
-                         {
-               symbol: Tokens.USDC,
-               token_amount: transferAmount
-             }
+            {
+              symbol: Tokens.USDC,
+              token_amount: transferAmount
+            }
           ],
           description: `RoluATM withdrawal of $${withdrawAmount}`
         });
         finalPayload = payResponse.finalPayload;
+        console.log('📧 Pay command response:', finalPayload);
       }
 
       console.log('📋 Transaction response:', finalPayload);
