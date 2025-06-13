@@ -16,6 +16,14 @@ export const WorldIdSignIn = () => {
     try {
       console.log('🔐 Starting World ID sign-in...');
 
+      // Check if MiniKit is installed (crucial for preventing browser redirects)
+      if (!MiniKit.isInstalled()) {
+        console.error('❌ MiniKit is not installed - app not running in World App');
+        setError('Please open this app in World App to sign in');
+        setIsLoading(false);
+        return;
+      }
+
       // World ID verification for authentication
       const verifyPayload = {
         action: "rolu-atm-signin",

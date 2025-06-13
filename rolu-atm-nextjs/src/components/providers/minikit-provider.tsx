@@ -15,7 +15,8 @@ export default function MiniKitProvider({ children }: MiniKitProviderProps) {
     if (appId) {
       try {
         MiniKit.install(appId);
-        console.log('✅ MiniKit initialized successfully');
+        console.log('✅ MiniKit initialized successfully with app ID:', appId);
+        console.log('🔍 MiniKit installed status:', MiniKit.isInstalled());
       } catch (error) {
         console.error('❌ MiniKit initialization failed:', error);
       }
