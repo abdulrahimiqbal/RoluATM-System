@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateWithdrawal, updateUserBalance, getUserById } from '@/lib/database';
+import { updateWithdrawal } from '@/lib/database';
 
 export async function POST(request: NextRequest) {
   try {
