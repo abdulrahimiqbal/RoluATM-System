@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import MiniKitProvider from "@/components/providers/minikit-provider";
+import ErudaProvider from "@/components/providers/eruda-provider";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -26,6 +27,7 @@ export default function RootLayout({
       <body
         className={`${inter.variable} antialiased`}
       >
+        <ErudaProvider />
         <MiniKitProvider>
           {children}
         </MiniKitProvider>
