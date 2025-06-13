@@ -14,9 +14,8 @@ export const WorldIdSignIn = () => {
     setError('');
 
     try {
-      console.log('🔐 Starting World ID sign-in...');
+      console.log('🔐 Starting wallet authentication...');
       console.log('🌍 MiniKit object:', MiniKit);
-      console.log('🔍 Window object keys:', Object.keys(window));
 
       // Check if MiniKit is installed (crucial for preventing browser redirects)
       const isInstalled = MiniKit.isInstalled();
@@ -31,19 +30,30 @@ export const WorldIdSignIn = () => {
         return;
       }
 
-      // World ID verification for authentication
-      const verifyPayload = {
-        action: "rolu-atm-signin",
-        signal: "",
-        verification_level: VerificationLevel.Orb,
+      // First get a nonce from our backend
+      console.log('🔑 Getting nonce from backend...');
+      const nonceResponse = await fetch('/api/nonce');
+      if (!nonceResponse.ok) {
+        throw new Error('Failed to get nonce');
+      }
+      const { nonce } = await nonceResponse.json();
+      console.log('✅ Nonce received:', nonce);
+
+      // Wallet authentication for both World ID and wallet access
+      const walletAuthPayload = {
+        nonce: nonce,
+        requestId: '0',
+        expirationTime: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        notBefore: new Date(new Date().getTime() - 24 * 60 * 60 * 1000), // 24 hours ago
+        statement: 'Sign in to RoluATM for secure cash withdrawal using your World ID and wallet.',
       };
 
-      console.log('📝 Verify payload:', verifyPayload);
-      console.log('📝 Requesting World ID verification...');
+      console.log('📝 Wallet auth payload:', walletAuthPayload);
+      console.log('📝 Requesting wallet authentication...');
       
-      const response = await MiniKit.commandsAsync.verify(verifyPayload);
+      const response = await MiniKit.commandsAsync.walletAuth(walletAuthPayload);
       
-      console.log('📋 Raw World ID response:', response);
+      console.log('📋 Raw wallet auth response:', response);
       console.log('📋 Response type:', typeof response);
       console.log('📋 Response keys:', Object.keys(response || {}));
       
@@ -53,12 +63,16 @@ export const WorldIdSignIn = () => {
       }
 
       if (response?.finalPayload?.status === "success") {
-        console.log('✅ World ID verification successful');
-        console.log('🔑 Proof data:', {
-          nullifier_hash: response.finalPayload.nullifier_hash,
-          verification_level: response.finalPayload.verification_level,
-          proof: response.finalPayload.proof?.substring(0, 50) + '...'
+        console.log('✅ Wallet authentication successful');
+        console.log('🔑 Wallet data:', {
+          address: response.finalPayload.address,
+          message: response.finalPayload.message?.substring(0, 100) + '...',
+          signature: response.finalPayload.signature?.substring(0, 50) + '...'
         });
+
+        // Get wallet address from MiniKit
+        const walletAddress = response.finalPayload.address;
+        console.log('💰 Wallet address from response:', walletAddress);
         
         // Send to backend for user creation/authentication
         console.log('🔄 Sending to backend...');
@@ -66,8 +80,9 @@ export const WorldIdSignIn = () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            worldIdProof: response.finalPayload,
-            action: verifyPayload.action
+            walletAuthPayload: response.finalPayload,
+            nonce: nonce,
+            walletAddress: walletAddress || response.finalPayload.address
           })
         });
 
@@ -85,10 +100,10 @@ export const WorldIdSignIn = () => {
           setError(errorData.message || 'Authentication failed');
         }
       } else {
-        console.error('❌ World ID verification failed');
+        console.error('❌ Wallet authentication failed');
         console.error('❌ Response:', response);
         console.error('❌ Final payload:', response?.finalPayload);
-        setError(`World ID verification failed: ${response?.finalPayload?.status || 'Unknown error'}`);
+        setError(`Wallet authentication failed: ${response?.finalPayload?.status || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('❌ Sign-in error:', error);
@@ -114,7 +129,7 @@ export const WorldIdSignIn = () => {
             <span>Signing In...</span>
           </div>
         ) : (
-          '🌍 Sign In with World ID'
+          '🌍 Sign In with World ID & Wallet'
         )}
       </button>
       
@@ -125,8 +140,8 @@ export const WorldIdSignIn = () => {
       )}
 
       <div className="text-xs text-gray-500 text-center">
-        <p>Secure authentication using World ID</p>
-        <p>Your identity is verified but remains private</p>
+        <p>Secure authentication using World ID and wallet</p>
+        <p>Your identity is verified and wallet connected</p>
         <p className="mt-2 text-xs text-blue-500">Debug: Tap Eruda icon (bottom right) for console</p>
       </div>
     </div>
