@@ -4,20 +4,12 @@ import { useState } from 'react';
 import { MiniKit, Tokens } from '@worldcoin/minikit-js';
 import { WORLD_CHAIN_CONTRACTS, ERC20_ABI, ROLU_TREASURY_ADDRESS, toUSDCUnits } from '@/lib/contracts';
 
-interface User {
-  id: string;
-  verification_level?: string;
-  nullifier_hash?: string;
-  wallet_address?: string;
-}
-
 interface WithdrawalFormProps {
   balance: number;
   onWithdrawal: () => void;
-  user: User | null;
 }
 
-export const WithdrawalForm = ({ balance, onWithdrawal, user }: WithdrawalFormProps) => {
+export const WithdrawalForm = ({ balance, onWithdrawal }: WithdrawalFormProps) => {
   const [amount, setAmount] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');

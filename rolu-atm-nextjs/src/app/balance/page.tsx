@@ -123,7 +123,6 @@ export default function BalancePage() {
           <WithdrawalForm 
             balance={balance} 
             onWithdrawal={fetchUserBalance}
-            user={user}
           />
         </div>
 
