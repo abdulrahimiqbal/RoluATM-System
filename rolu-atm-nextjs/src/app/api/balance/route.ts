@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuthToken } from '@/lib/auth';
-import { getUserById } from '@/lib/database';
+import { getUserById, updateUserBalance } from '@/lib/database';
+import { getWalletBalanceInUSDC } from '@/lib/blockchain';
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,15 +22,34 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    console.log('✅ Balance retrieved for user:', user.id, 'Balance:', user.balance);
+    // If user has a wallet address, fetch fresh balance from blockchain
+    let currentBalance = user.balance;
+    if (user.wallet_address) {
+      try {
+        console.log('🔄 Fetching fresh wallet balance for:', user.wallet_address);
+        const freshBalance = await getWalletBalanceInUSDC(user.wallet_address);
+        
+        // Update the database with fresh balance
+        await updateUserBalance(user.id, freshBalance);
+        currentBalance = freshBalance;
+        
+        console.log('✅ Fresh balance updated:', freshBalance);
+      } catch (error) {
+        console.error('❌ Failed to fetch fresh balance, using cached:', error);
+        // Use cached balance if blockchain fetch fails
+      }
+    }
+
+    console.log('✅ Balance retrieved for user:', user.id, 'Balance:', currentBalance);
 
     return NextResponse.json({
       user: {
         id: user.id,
         verification_level: user.verification_level,
-        nullifier_hash: user.nullifier_hash
+        nullifier_hash: user.nullifier_hash,
+        wallet_address: user.wallet_address
       },
-      balance: user.balance
+      balance: currentBalance
     });
   } catch (error) {
     console.error('❌ Balance fetch error:', error);

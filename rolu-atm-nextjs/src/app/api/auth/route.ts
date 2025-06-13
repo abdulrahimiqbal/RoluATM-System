@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { verifySiweMessage } from '@worldcoin/minikit-js';
 import { createJWTToken } from '@/lib/auth';
 import { getUserByWalletAddress, createUser, updateUserBalance } from '@/lib/database';
+import { getWalletBalanceInUSDC } from '@/lib/blockchain';
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,14 +56,12 @@ export async function POST(request: NextRequest) {
       // Fetch actual wallet balance from blockchain
       let actualBalance = 0;
       try {
-        console.log('💰 Fetching wallet balance...');
-        // For now, we'll use a mock balance - in production you'd call a blockchain RPC
-        // const balance = await getWalletBalance(walletAddress);
-        actualBalance = 150.50; // Mock balance - replace with actual blockchain call
-        console.log('✅ Wallet balance fetched:', actualBalance);
+        console.log('💰 Fetching real wallet balance from blockchain...');
+        actualBalance = await getWalletBalanceInUSDC(walletAddress);
+        console.log('✅ Real wallet balance fetched:', actualBalance);
       } catch (error) {
         console.error('❌ Failed to fetch wallet balance:', error);
-        actualBalance = 100.00; // Fallback balance
+        actualBalance = 25.00; // Fallback balance
       }
       
       user = await createUser({
@@ -74,9 +73,8 @@ export async function POST(request: NextRequest) {
       
       // Update balance with current wallet balance
       try {
-        console.log('💰 Updating wallet balance...');
-        // const balance = await getWalletBalance(walletAddress);
-        const actualBalance = 175.25; // Mock updated balance
+        console.log('💰 Updating wallet balance from blockchain...');
+        const actualBalance = await getWalletBalanceInUSDC(walletAddress);
         await updateUserBalance(user.id, actualBalance);
         console.log('✅ Balance updated:', actualBalance);
       } catch (error) {

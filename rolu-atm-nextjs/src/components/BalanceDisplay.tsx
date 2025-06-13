@@ -8,9 +8,10 @@ interface User {
 interface BalanceDisplayProps {
   balance: number;
   user: User | null;
+  onRefresh?: () => void;
 }
 
-export const BalanceDisplay = ({ balance, user }: BalanceDisplayProps) => {
+export const BalanceDisplay = ({ balance, user, onRefresh }: BalanceDisplayProps) => {
   const formatAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
@@ -22,8 +23,24 @@ export const BalanceDisplay = ({ balance, user }: BalanceDisplayProps) => {
   return (
     <div className="text-center space-y-4">
       <div className="bg-gradient-to-r from-green-400 to-emerald-500 text-white p-6 rounded-lg shadow-lg">
-        <p className="text-sm opacity-90 mb-2">Available Balance</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm opacity-90">Total Balance (USDC)</p>
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              className="text-white/80 hover:text-white transition-colors p-1 rounded"
+              title="Refresh balance"
+            >
+              🔄
+            </button>
+          )}
+        </div>
         <p className="text-4xl font-bold">${balance.toFixed(2)}</p>
+        {user?.wallet_address && (
+          <p className="text-xs opacity-75 mt-2">
+            💰 Converted from your crypto assets
+          </p>
+        )}
       </div>
       
       {user && (
@@ -51,8 +68,18 @@ export const BalanceDisplay = ({ balance, user }: BalanceDisplayProps) => {
       )}
 
       <div className="text-xs text-gray-400 space-y-1">
-        <p>💡 This is your wallet balance</p>
-        <p>Withdraw cash from any RoluATM location</p>
+        {user?.wallet_address ? (
+          <>
+            <p>💡 Balance includes ETH, USDC, WLD & other tokens</p>
+            <p>🔄 Converted to USDC at current market rates</p>
+            <p>🏧 Withdraw cash from any RoluATM location</p>
+          </>
+        ) : (
+          <>
+            <p>💡 This is your wallet balance</p>
+            <p>Withdraw cash from any RoluATM location</p>
+          </>
+        )}
       </div>
     </div>
   );

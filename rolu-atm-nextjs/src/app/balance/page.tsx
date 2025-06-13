@@ -115,7 +115,7 @@ export default function BalancePage() {
 
         {/* Balance Display */}
         <div className="bg-white rounded-xl shadow-lg p-6">
-          <BalanceDisplay balance={balance} user={user} />
+          <BalanceDisplay balance={balance} user={user} onRefresh={fetchUserBalance} />
         </div>
         
         {/* Withdrawal Form */}
