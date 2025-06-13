@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { MiniKit } from '@worldcoin/minikit-js';
+import { MiniKit, Tokens } from '@worldcoin/minikit-js';
 import { WORLD_CHAIN_CONTRACTS, ERC20_ABI, ROLU_TREASURY_ADDRESS, toUSDCUnits } from '@/lib/contracts';
 
 interface WithdrawalFormProps {
@@ -44,19 +44,51 @@ export const WithdrawalForm = ({ balance, onWithdrawal }: WithdrawalFormProps) =
 
       // Create World Network transaction
       console.log('🌐 Sending USDC transfer transaction...');
-      const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({
-        transaction: [
-          {
-            address: WORLD_CHAIN_CONTRACTS.USDC,
-            abi: ERC20_ABI,
-            functionName: 'transfer',
-            args: [
-              ROLU_TREASURY_ADDRESS,
-              toUSDCUnits(withdrawAmount)
-            ]
-          }
-        ]
-      });
+      
+      // Log transaction details for debugging
+      const transferAmount = toUSDCUnits(withdrawAmount);
+      console.log('🔍 Transaction details:');
+      console.log('  - Contract:', WORLD_CHAIN_CONTRACTS.USDC);
+      console.log('  - To Address:', ROLU_TREASURY_ADDRESS);
+      console.log('  - Amount (raw):', withdrawAmount);
+      console.log('  - Amount (USDC units):', transferAmount);
+      console.log('  - User balance:', balance);
+      
+      // Try sendTransaction first (requires contract whitelisting)
+      let finalPayload;
+      try {
+        const response = await MiniKit.commandsAsync.sendTransaction({
+          transaction: [
+            {
+              address: WORLD_CHAIN_CONTRACTS.USDC,
+              abi: ERC20_ABI,
+              functionName: 'transfer',
+              args: [
+                ROLU_TREASURY_ADDRESS,
+                transferAmount
+              ]
+            }
+          ]
+        });
+        finalPayload = response.finalPayload;
+      } catch (sendTransactionError) {
+        console.log('📧 sendTransaction failed (likely contract not whitelisted), trying Pay command...');
+        console.log('Error:', sendTransactionError);
+        
+        // Fallback to Pay command (simpler, works with whitelisted addresses)
+        const payResponse = await MiniKit.commandsAsync.pay({
+          reference: `rolu-withdrawal-${Date.now()}`,
+          to: ROLU_TREASURY_ADDRESS,
+          tokens: [
+                         {
+               symbol: Tokens.USDC,
+               token_amount: transferAmount
+             }
+          ],
+          description: `RoluATM withdrawal of $${withdrawAmount}`
+        });
+        finalPayload = payResponse.finalPayload;
+      }
 
       console.log('📋 Transaction response:', finalPayload);
 
