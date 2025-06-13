@@ -7,8 +7,9 @@ import { WithdrawalForm } from '@/components/WithdrawalForm';
 
 interface User {
   id: string;
-  verification_level: string;
-  nullifier_hash: string;
+  verification_level?: string;
+  nullifier_hash?: string;
+  wallet_address?: string;
 }
 
 export default function BalancePage() {

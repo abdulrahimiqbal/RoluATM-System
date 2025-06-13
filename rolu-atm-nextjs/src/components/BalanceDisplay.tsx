@@ -1,7 +1,8 @@
 interface User {
   id: string;
-  verification_level: string;
-  nullifier_hash: string;
+  verification_level?: string;
+  nullifier_hash?: string;
+  wallet_address?: string;
 }
 
 interface BalanceDisplayProps {
@@ -10,6 +11,10 @@ interface BalanceDisplayProps {
 }
 
 export const BalanceDisplay = ({ balance, user }: BalanceDisplayProps) => {
+  const formatAddress = (address: string) => {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
   const formatNullifier = (hash: string) => {
     return `${hash.slice(0, 6)}...${hash.slice(-4)}`;
   };
@@ -25,21 +30,28 @@ export const BalanceDisplay = ({ balance, user }: BalanceDisplayProps) => {
         <div className="bg-gray-50 rounded-lg p-4 space-y-2">
           <div className="flex items-center justify-center space-x-2">
             <span className="text-lg">
-              {user.verification_level === 'orb' ? '🌍' : '📱'}
+              {user.wallet_address ? '💰' : user.verification_level === 'orb' ? '🌍' : '📱'}
             </span>
             <span className="text-sm font-medium text-gray-700">
-              {user.verification_level === 'orb' ? 'Orb Verified' : 'Device Verified'}
+              {user.wallet_address ? 'Wallet Connected' : 
+               user.verification_level === 'orb' ? 'Orb Verified' : 'Device Verified'}
             </span>
           </div>
           
           <div className="text-xs text-gray-500">
-            <p>Account ID: {formatNullifier(user.nullifier_hash)}</p>
+            {user.wallet_address ? (
+              <p>Wallet: {formatAddress(user.wallet_address)}</p>
+            ) : user.nullifier_hash ? (
+              <p>Account ID: {formatNullifier(user.nullifier_hash)}</p>
+            ) : (
+              <p>Account ID: {user.id.slice(0, 8)}...</p>
+            )}
           </div>
         </div>
       )}
 
       <div className="text-xs text-gray-400 space-y-1">
-        <p>💡 This is your World ID balance</p>
+        <p>💡 This is your wallet balance</p>
         <p>Withdraw cash from any RoluATM location</p>
       </div>
     </div>
