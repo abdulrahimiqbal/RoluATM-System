@@ -85,20 +85,19 @@ export const WithdrawalForm = ({ balance, onWithdrawal, user }: WithdrawalFormPr
           console.log('📧 sendTransaction returned invalid_contract error, trying Pay command...');
           console.log('Error details:', finalPayload);
           
-          // Fallback to Pay command (using user's own address for testing)
-          const testRecipient = user?.wallet_address || ROLU_TREASURY_ADDRESS;
-          console.log('🧪 Testing Pay command with recipient:', testRecipient);
+          // Fallback to Pay command (treasury address is whitelisted)
+          console.log('💰 Using Pay command to treasury:', ROLU_TREASURY_ADDRESS);
           
           const payResponse = await MiniKit.commandsAsync.pay({
             reference: `rolu-withdrawal-${Date.now()}`,
-            to: testRecipient,
+            to: ROLU_TREASURY_ADDRESS,
             tokens: [
               {
                 symbol: Tokens.USDC,
                 token_amount: transferAmount
               }
             ],
-            description: `RoluATM withdrawal test of $${withdrawAmount}`
+            description: `RoluATM withdrawal of $${withdrawAmount}`
           });
           finalPayload = payResponse.finalPayload;
           console.log('📧 Pay command response:', finalPayload);
@@ -107,20 +106,19 @@ export const WithdrawalForm = ({ balance, onWithdrawal, user }: WithdrawalFormPr
         console.log('📧 sendTransaction threw an exception, trying Pay command...');
         console.log('Error:', sendTransactionError);
         
-        // Fallback to Pay command (using user's own address for testing)
-        const testRecipient = user?.wallet_address || ROLU_TREASURY_ADDRESS;
-        console.log('🧪 Testing Pay command with recipient:', testRecipient);
+        // Fallback to Pay command (treasury address is whitelisted)
+        console.log('💰 Using Pay command to treasury:', ROLU_TREASURY_ADDRESS);
         
         const payResponse = await MiniKit.commandsAsync.pay({
           reference: `rolu-withdrawal-${Date.now()}`,
-          to: testRecipient,
+          to: ROLU_TREASURY_ADDRESS,
           tokens: [
             {
               symbol: Tokens.USDC,
               token_amount: transferAmount
             }
           ],
-          description: `RoluATM withdrawal test of $${withdrawAmount}`
+          description: `RoluATM withdrawal of $${withdrawAmount}`
         });
         finalPayload = payResponse.finalPayload;
         console.log('📧 Pay command response:', finalPayload);
