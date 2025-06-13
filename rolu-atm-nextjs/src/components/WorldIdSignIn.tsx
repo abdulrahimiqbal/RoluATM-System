@@ -33,7 +33,7 @@ export const WorldIdSignIn = () => {
 
       // World ID verification for authentication
       const verifyPayload = {
-        action: "rolu-atm-signin",
+        action: "verify",
         signal: "",
         verification_level: VerificationLevel.Orb,
       };
