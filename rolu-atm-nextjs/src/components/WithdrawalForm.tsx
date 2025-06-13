@@ -4,12 +4,20 @@ import { useState } from 'react';
 import { MiniKit, Tokens } from '@worldcoin/minikit-js';
 import { WORLD_CHAIN_CONTRACTS, ERC20_ABI, ROLU_TREASURY_ADDRESS, toUSDCUnits } from '@/lib/contracts';
 
+interface User {
+  id: string;
+  verification_level?: string;
+  nullifier_hash?: string;
+  wallet_address?: string;
+}
+
 interface WithdrawalFormProps {
   balance: number;
   onWithdrawal: () => void;
+  user: User | null;
 }
 
-export const WithdrawalForm = ({ balance, onWithdrawal }: WithdrawalFormProps) => {
+export const WithdrawalForm = ({ balance, onWithdrawal, user }: WithdrawalFormProps) => {
   const [amount, setAmount] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
@@ -77,17 +85,20 @@ export const WithdrawalForm = ({ balance, onWithdrawal }: WithdrawalFormProps) =
           console.log('📧 sendTransaction returned invalid_contract error, trying Pay command...');
           console.log('Error details:', finalPayload);
           
-          // Fallback to Pay command (simpler, works with whitelisted addresses)
+          // Fallback to Pay command (using user's own address for testing)
+          const testRecipient = user?.wallet_address || ROLU_TREASURY_ADDRESS;
+          console.log('🧪 Testing Pay command with recipient:', testRecipient);
+          
           const payResponse = await MiniKit.commandsAsync.pay({
             reference: `rolu-withdrawal-${Date.now()}`,
-            to: ROLU_TREASURY_ADDRESS,
+            to: testRecipient,
             tokens: [
               {
                 symbol: Tokens.USDC,
                 token_amount: transferAmount
               }
             ],
-            description: `RoluATM withdrawal of $${withdrawAmount}`
+            description: `RoluATM withdrawal test of $${withdrawAmount}`
           });
           finalPayload = payResponse.finalPayload;
           console.log('📧 Pay command response:', finalPayload);
@@ -96,17 +107,20 @@ export const WithdrawalForm = ({ balance, onWithdrawal }: WithdrawalFormProps) =
         console.log('📧 sendTransaction threw an exception, trying Pay command...');
         console.log('Error:', sendTransactionError);
         
-        // Fallback to Pay command (simpler, works with whitelisted addresses)
+        // Fallback to Pay command (using user's own address for testing)
+        const testRecipient = user?.wallet_address || ROLU_TREASURY_ADDRESS;
+        console.log('🧪 Testing Pay command with recipient:', testRecipient);
+        
         const payResponse = await MiniKit.commandsAsync.pay({
           reference: `rolu-withdrawal-${Date.now()}`,
-          to: ROLU_TREASURY_ADDRESS,
+          to: testRecipient,
           tokens: [
             {
               symbol: Tokens.USDC,
               token_amount: transferAmount
             }
           ],
-          description: `RoluATM withdrawal of $${withdrawAmount}`
+          description: `RoluATM withdrawal test of $${withdrawAmount}`
         });
         finalPayload = payResponse.finalPayload;
         console.log('📧 Pay command response:', finalPayload);
