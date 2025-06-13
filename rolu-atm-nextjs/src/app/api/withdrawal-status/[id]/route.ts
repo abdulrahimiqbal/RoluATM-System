@@ -4,10 +4,11 @@ import { getWithdrawal } from '@/lib/database';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('📋 Withdrawal status check for:', params.id);
+    const resolvedParams = await params;
+    console.log('📋 Withdrawal status check for:', resolvedParams.id);
     
     const token = request.cookies.get('auth-token')?.value;
     if (!token) {
@@ -16,7 +17,7 @@ export async function GET(
     }
 
     const decoded = verifyAuthToken(token);
-    const withdrawal = await getWithdrawal(params.id);
+    const withdrawal = await getWithdrawal(resolvedParams.id);
 
     if (!withdrawal) {
       console.log('❌ Withdrawal not found');
